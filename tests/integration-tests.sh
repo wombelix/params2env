@@ -526,6 +526,56 @@ find_binary() {
     echo "$binary_path"
 }
 
+# Function to create IAM role
+create_iam_role() {
+    echo -e "\n${GREEN}=== Creating IAM Role ===${NC}"
+
+    # Check if role already exists
+    if aws iam get-role --role-name params2env-test-role >/dev/null 2>&1; then
+        echo -e "${YELLOW}Role params2env-test-role already exists, reusing existing role${NC}"
+        return 0
+    fi
+
+    # Create trust policy document with proper JSON escaping
+    local trust_policy
+    # Convert SSO role ARN to proper format if needed
+    local formatted_principal="$AWS_IAM_PRINCIPAL"
+    if [[ "$AWS_IAM_PRINCIPAL" =~ ^arn:aws:iam::[0-9]{12}:role/AWSReservedSSO_ ]]; then
+        formatted_principal="arn:aws:iam::${AWS_ACCOUNT_ID}:root"
+    fi
+
+    trust_policy=$(jq -n \
+        --arg principal "$formatted_principal" \
+        '{
+            Version: "2012-10-17",
+            Statement: [{
+                Effect: "Allow",
+                Principal: {
+                    AWS: $principal
+                },
+                Action: "sts:AssumeRole"
+            }]
+        }')
+
+    # Create role
+    if ! aws iam create-role \
+        --role-name params2env-test-role \
+        --assume-role-policy-document "$trust_policy"; then
+        echo -e "${RED}Failed to create IAM role${NC}"
+        exit 1
+    fi
+
+    # Attach policy to role
+    if ! aws iam attach-role-policy \
+        --role-name params2env-test-role \
+        --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy"; then
+        echo -e "${RED}Failed to attach policy to role${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Successfully created IAM role${NC}"
+}
+
 # Function to clean up IAM resources
 cleanup_iam() {
     echo -e "${YELLOW}Cleaning up IAM resources...${NC}"
