@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT
+
+params2env
+.idea
+.vscode
+coverage.out
+test.env
+secret
