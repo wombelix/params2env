@@ -8,3 +8,4 @@ params2env
 coverage.out
 test.env
 secret
+cmd/test.txt
