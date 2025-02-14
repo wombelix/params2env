@@ -11,6 +11,14 @@ SPDX-License-Identifier: CC0-1.0
 
 ## Table of Contents
 
+* [CLI](#cli)
+   * [Technical details](#technical-details)
+* [Usage](#usage)
+   * [Subcommand: read](#subcommand-read)
+   * [Subcommand: create](#subcommand-create)
+   * [Subcommand: modify](#subcommand-modify)
+   * [Subcommand: delete](#subcommand-delete)
+   * [YAML configuration file reference](#yaml-configuration-file-reference)
 * [Source](#source)
 * [Contribute](#contribute)
 * [License](#license)
