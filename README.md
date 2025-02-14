@@ -19,6 +19,9 @@ SPDX-License-Identifier: CC0-1.0
    * [Subcommand: modify](#subcommand-modify)
    * [Subcommand: delete](#subcommand-delete)
    * [YAML configuration file reference](#yaml-configuration-file-reference)
+* [Build and Test](#build-and-test)
+   * [Makefile](#makefile)
+   * [Integration Tests](#integration-tests)
 * [Source](#source)
 * [Contribute](#contribute)
 * [License](#license)
@@ -230,6 +233,68 @@ params2env read --file ~/.env
 # Override config and read single parameter
 params2env read --path /custom/param
 ```
+
+## Build and Test
+
+### Makefile
+
+The project includes a Makefile with the following targets:
+
+* `make build`: Build the params2env binary
+* `make tests`: Run all unit tests with verbose output and coverage report
+* `make clean`: Remove the binary and coverage files
+
+Example:
+
+```bash
+# Build the binary
+make build
+
+# Run tests
+make tests
+
+# Clean up
+make clean
+```
+
+### Integration Tests
+
+The `tests/integration-tests.sh` script provides comprehensive integration testing.
+It tests all features against a real AWS environment, including parameter creation,
+modification, deletion, and role assumption.
+
+Prerequisites:
+
+* AWS credentials configured
+* The following environment variables set:
+   * `AWS_ACCOUNT_ID`: Your 12-digit AWS account ID
+   * `PRIMARY_REGION`: Your primary AWS region (e.g., eu-central-1)
+   * `SECONDARY_REGION`: Your secondary AWS region (e.g., eu-west-1)
+   * `AWS_IAM_PRINCIPAL`: Your IAM principal ARN (user or role)
+
+Example:
+
+```bash
+# Set required environment variables
+export AWS_ACCOUNT_ID="123456789012"
+export PRIMARY_REGION="eu-central-1"
+export SECONDARY_REGION="eu-west-1"
+export AWS_IAM_PRINCIPAL="arn:aws:iam::123456789012:role/YourRole"
+
+# Run integration tests
+./tests/integration-tests.sh
+```
+
+The script will:
+
+1) Create necessary IAM roles and policies
+2) Test String and SecureString parameters
+3) Test with and without role assumption
+4) Test configuration file functionality
+5) Clean up all created resources
+
+Note: Some tests involve AWS KMS keys which incur costs ($1/month per key).
+The script will ask for confirmation before creating any billable resources.
 
 ## Source
 
