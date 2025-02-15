@@ -13,7 +13,9 @@ import (
 )
 
 var (
-	version     = "1.0.0"
+	version     = "dev"
+	commit      = "none"
+	date        = "unknown"
 	logLevel    string
 	showVersion bool
 
@@ -27,7 +29,7 @@ across regions and secure string parameters using KMS keys.`,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if showVersion {
-				fmt.Printf("params2env version %s\n", version)
+				fmt.Printf("params2env version %s (commit %s, built on %s)\n", version, commit, date)
 				return nil
 			}
 			return cmd.Help()
