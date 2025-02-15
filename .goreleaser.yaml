@@ -1,0 +1,94 @@
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: MIT
+
+project_name: params2env
+
+builds:
+  - main: ./cmd/params2env
+    binary: params2env
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X "main.version={{ .Version }}" -X "main.commit={{ .FullCommit }}" -X "main.date={{ .Date }}"
+
+archives:
+  - format: tar.gz
+    wrap_in_directory: true
+    goos:
+      - linux
+      - darwin
+    files:
+      - README.md
+      - CHANGELOG.md
+      - CHANGELOG.md.license
+      - LICENSES/*
+  - format: zip
+    wrap_in_directory: true
+    goos:
+      - windows
+    files:
+      - README.md
+      - CHANGELOG.md
+      - CHANGELOG.md.license
+      - LICENSES/*
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+changelog:
+  use: git
+  abbrev: 8
+  groups:
+    - title: "Features"
+      regexp: '^feat:'
+      order: 0
+    - title: "Bug Fixes"
+      regexp: '^fix:'
+      order: 1
+    - title: "Build"
+      regexp: '^build:'
+      order: 2
+    - title: "Test"
+      regexp: '^tests?:'
+      order: 3
+    - title: "Bump"
+      regexp: '^bump:'
+      order: 4
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^refactor:"
+
+release:
+  # GitHub release configuration:
+  github:
+    owner: wombelix
+    name: params2env
+    draft: false
+    mode: append
+    name_template: "{{ .ProjectName }}-v{{ .Version }}"
+  # GitLab release configuration:
+  gitlab:
+    owner: wombelix
+    name: params2env
+    draft: false
+    mode: append
+    name_template: "{{ .ProjectName }}-v{{ .Version }}"
+  # Codeberg uses Gitea:
+  gitea:
+    owner: wombelix
+    name: params2env
+    api_url: https://codeberg.org/api/v1
+    draft: false
+    mode: append
+    name_template: "{{ .ProjectName }}-v{{ .Version }}"
