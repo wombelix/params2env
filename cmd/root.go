@@ -2,6 +2,17 @@
 //
 // SPDX-License-Identifier: MIT
 
+// Package cmd implements the command-line interface for params2env.
+//
+// It uses the cobra library to provide a rich CLI experience with subcommands
+// for reading, creating, modifying, and deleting AWS SSM parameters. The package
+// handles command-line argument parsing, configuration loading, and dispatching
+// to the appropriate functionality.
+//
+// Global flags supported by all commands include:
+//   - --loglevel: Set logging verbosity (debug, info, warn, error)
+//   - --version: Display version information
+//   - --help: Show help and usage information
 package cmd
 
 import (
@@ -13,12 +24,17 @@ import (
 )
 
 var (
-	version     = "dev"
-	commit      = "none"
-	date        = "unknown"
+	// Build information, set via ldflags during build
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+
+	// Command-line flags
 	logLevel    string
 	showVersion bool
 
+	// rootCmd represents the base command when called without any subcommands.
+	// It provides global flags and displays help information by default.
 	rootCmd = &cobra.Command{
 		Use:   "params2env",
 		Short: "A tool to manage AWS SSM Parameter Store entries",
@@ -36,10 +52,13 @@ across regions and secure string parameters using KMS keys.`,
 		},
 	}
 
-	// Global variables for testing
+	// osExit allows tests to override os.Exit
 	osExit = os.Exit
 )
 
+// init initializes the root command by setting up global flags and registering
+// all subcommands. It also configures the persistent pre-run hook for logging
+// initialization.
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
@@ -59,10 +78,13 @@ func init() {
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
+// If there is an error, it will be returned to the caller.
 func Execute() error {
 	return rootCmd.Execute()
 }
 
+// printUsage displays detailed usage information for all commands and their options.
+// This includes global flags and all subcommands with their respective options.
 func printUsage() {
 	fmt.Printf(`Usage: params2env [global options] <subcommand> [subcommand options]
 
