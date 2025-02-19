@@ -6,101 +6,154 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"git.sr.ht/~wombelix/params2env/internal/config"
 	"github.com/spf13/cobra"
 )
 
+// Command-line flags for the delete command
 var (
-	deletePath    string
-	deleteRegion  string
-	deleteRole    string
+	// deletePath is the full path of the parameter to delete
+	deletePath string
+	// deleteRegion is the AWS region where the parameter will be deleted
+	deleteRegion string
+	// deleteRole is the AWS IAM role to assume for the operation
+	deleteRole string
+	// deleteReplica is the region where the parameter replica should be deleted
 	deleteReplica string
 )
 
+// deleteCmd represents the delete command
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a parameter from SSM Parameter Store",
 	Long: `Delete a parameter from SSM Parameter Store.
 
 The parameter will be deleted from the specified region and optionally from a replica region.
-If the parameter doesn't exist, the command will fail with an appropriate error message.`,
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		// Check required flags
-		if deletePath == "" {
-			return fmt.Errorf("required flag \"path\" not set")
-		}
-		return nil
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Load configuration
-		cfg, err := config.LoadConfig()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
-		}
+If the parameter doesn't exist, the command will fail with an appropriate error message.
 
-		// Merge config with flags (flags take precedence)
-		if cfg != nil {
-			if deleteRegion == "" {
-				deleteRegion = cfg.Region
-			}
-			if deleteReplica == "" {
-				deleteReplica = cfg.Replica
-			}
-			if deleteRole == "" {
-				deleteRole = cfg.Role
-			}
-		}
+Examples:
+  # Delete a parameter from the default region
+  params2env delete --path /myapp/config/url
 
-		// If region is still empty, try AWS_REGION env var
+  # Delete a parameter from a specific region
+  params2env delete --path /myapp/config/url --region us-west-2
+
+  # Delete a parameter and its replica
+  params2env delete --path /myapp/config/url --replica us-west-2`,
+	PreRunE: validateDeleteFlags,
+	RunE:    runDelete,
+}
+
+// validateDeleteFlags checks if all required flags are set
+func validateDeleteFlags(cmd *cobra.Command, args []string) error {
+	if deletePath == "" {
+		return fmt.Errorf("required flag \"path\" not set")
+	}
+	return nil
+}
+
+// runDelete executes the delete command
+func runDelete(cmd *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
+	}
+
+	// Merge config with flags (flags take precedence)
+	mergeDeleteConfig(cfg)
+
+	// Ensure region is set
+	if err := ensureDeleteRegionIsSet(); err != nil {
+		return err
+	}
+
+	// Delete parameter in primary region
+	if err := deleteInPrimaryRegion(); err != nil {
+		return err
+	}
+
+	// Handle replica if specified
+	if deleteReplica != "" {
+		if err := deleteInReplicaRegion(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// mergeDeleteConfig merges configuration from file with command line flags
+func mergeDeleteConfig(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	if deleteRegion == "" {
+		deleteRegion = cfg.Region
+	}
+	if deleteReplica == "" {
+		deleteReplica = cfg.Replica
+	}
+	if deleteRole == "" {
+		deleteRole = cfg.Role
+	}
+}
+
+// ensureDeleteRegionIsSet ensures AWS region is set from flags, config, or environment
+func ensureDeleteRegionIsSet() error {
+	if deleteRegion == "" {
+		deleteRegion = os.Getenv("AWS_REGION")
 		if deleteRegion == "" {
-			deleteRegion = os.Getenv("AWS_REGION")
-			if deleteRegion == "" {
-				return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
-			}
+			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
+	}
+	return nil
+}
 
-		// Create AWS client
-		ctx := context.Background()
-		client, err := aws.NewClient(ctx, deleteRegion, deleteRole)
-		if err != nil {
-			return fmt.Errorf("failed to create AWS client: %w", err)
+// deleteInPrimaryRegion deletes the parameter in the primary region
+func deleteInPrimaryRegion() error {
+	ctx := context.Background()
+	client, err := aws.NewClient(ctx, deleteRegion, deleteRole)
+	if err != nil {
+		return fmt.Errorf("failed to create AWS client: %w", err)
+	}
+
+	fmt.Printf("Deleting parameter '%s' in region '%s'...\n", deletePath, deleteRegion)
+	if err := client.DeleteParameter(ctx, deletePath); err != nil {
+		if errors.Is(err, aws.ErrNotFound) {
+			return fmt.Errorf("parameter '%s' not found in region '%s'", deletePath, deleteRegion)
 		}
+		return fmt.Errorf("failed to delete parameter in region '%s': %w", deleteRegion, err)
+	}
 
-		// Delete parameter in primary region
-		fmt.Printf("Deleting parameter '%s' in region '%s'...\n", deletePath, deleteRegion)
-		if err := client.DeleteParameter(ctx, deletePath); err != nil {
-			if strings.Contains(err.Error(), "ParameterNotFound") {
-				return fmt.Errorf("parameter '%s' not found in region '%s'", deletePath, deleteRegion)
-			}
-			return fmt.Errorf("failed to delete parameter in region '%s': %w", deleteRegion, err)
+	fmt.Printf("Successfully deleted parameter '%s' in region '%s'\n", deletePath, deleteRegion)
+	return nil
+}
+
+// deleteInReplicaRegion deletes the parameter in the replica region
+func deleteInReplicaRegion() error {
+	ctx := context.Background()
+	replicaClient, err := aws.NewClient(ctx, deleteReplica, deleteRole)
+	if err != nil {
+		return fmt.Errorf("failed to create AWS client for replica region: %w", err)
+	}
+
+	fmt.Printf("Deleting parameter '%s' in replica region '%s'...\n", deletePath, deleteReplica)
+	if err := replicaClient.DeleteParameter(ctx, deletePath); err != nil {
+		if errors.Is(err, aws.ErrNotFound) {
+			fmt.Printf("Warning: Parameter '%s' not found in replica region '%s'\n", deletePath, deleteReplica)
+			return nil
 		}
-		fmt.Printf("Successfully deleted parameter '%s' in region '%s'\n", deletePath, deleteRegion)
+		return fmt.Errorf("failed to delete parameter in replica region '%s': %w", deleteReplica, err)
+	}
 
-		// Handle replica if specified
-		if deleteReplica != "" {
-			fmt.Printf("Deleting parameter '%s' in replica region '%s'...\n", deletePath, deleteReplica)
-			replicaClient, err := aws.NewClient(ctx, deleteReplica, deleteRole)
-			if err != nil {
-				return fmt.Errorf("failed to create AWS client for replica region: %w", err)
-			}
-
-			if err := replicaClient.DeleteParameter(ctx, deletePath); err != nil {
-				if strings.Contains(err.Error(), "ParameterNotFound") {
-					fmt.Printf("Warning: Parameter '%s' not found in replica region '%s'\n", deletePath, deleteReplica)
-					return nil
-				}
-				return fmt.Errorf("failed to delete parameter in replica region '%s': %w", deleteReplica, err)
-			}
-			fmt.Printf("Successfully deleted parameter '%s' in replica region '%s'\n", deletePath, deleteReplica)
-		}
-
-		return nil
-	},
+	fmt.Printf("Successfully deleted parameter '%s' in replica region '%s'\n", deletePath, deleteReplica)
+	return nil
 }
 
 func init() {
