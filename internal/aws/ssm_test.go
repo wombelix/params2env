@@ -37,13 +37,20 @@ func TestGetParameter(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:        "empty parameter name",
+			paramName:   "",
+			mockFunc:    nil,
+			wantErr:     true,
+			errContains: "parameter name is required",
+		},
+		{
 			name:      "parameter not found",
 			paramName: "/test/notfound",
 			mockFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
 				return nil, &types.ParameterNotFound{}
 			},
 			wantErr:     true,
-			errContains: "failed to get parameter",
+			errContains: "parameter not found",
 		},
 		{
 			name:      "nil value",
@@ -124,7 +131,7 @@ func TestCreateParameter(t *testing.T) {
 			paramName:   "/test/param",
 			value:       "test-value",
 			description: "test description",
-			paramType:   "String",
+			paramType:   ParameterTypeString,
 			mockFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
 				return &ssm.PutParameterOutput{}, nil
 			},
@@ -135,7 +142,7 @@ func TestCreateParameter(t *testing.T) {
 			paramName:   "/test/secret",
 			value:       "secret-value",
 			description: "test secret",
-			paramType:   "SecureString",
+			paramType:   ParameterTypeSecureString,
 			kmsKeyID:    strPtr("test-key"),
 			mockFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
 				return &ssm.PutParameterOutput{}, nil
@@ -143,22 +150,46 @@ func TestCreateParameter(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:        "empty parameter name",
+			paramName:   "",
+			value:       "test-value",
+			paramType:   ParameterTypeString,
+			wantErr:     true,
+			errContains: "parameter name is required",
+		},
+		{
+			name:        "empty parameter value",
+			paramName:   "/test/param",
+			value:       "",
+			paramType:   ParameterTypeString,
+			wantErr:     true,
+			errContains: "parameter value is required",
+		},
+		{
+			name:        "invalid parameter type",
+			paramName:   "/test/param",
+			value:       "test-value",
+			paramType:   "InvalidType",
+			wantErr:     true,
+			errContains: "invalid parameter type",
+		},
+		{
 			name:      "parameter already exists",
 			paramName: "/test/exists",
 			value:     "test-value",
-			paramType: "String",
+			paramType: ParameterTypeString,
 			mockFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
 				return nil, &types.ParameterAlreadyExists{}
 			},
 			wantErr:     true,
-			errContains: "failed to create parameter",
+			errContains: "parameter already exists",
 		},
 		{
 			name:        "with overwrite",
 			paramName:   "/test/overwrite",
 			value:       "test-value",
 			description: "test description",
-			paramType:   "String",
+			paramType:   ParameterTypeString,
 			overwrite:   true,
 			mockFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
 				return &ssm.PutParameterOutput{}, nil
@@ -169,7 +200,7 @@ func TestCreateParameter(t *testing.T) {
 			name:      "aws error",
 			paramName: "/test/error",
 			value:     "test-value",
-			paramType: "String",
+			paramType: ParameterTypeString,
 			mockFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
 				return nil, fmt.Errorf("AWS error")
 			},
@@ -221,6 +252,20 @@ func TestModifyParameter(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:        "empty parameter name",
+			paramName:   "",
+			value:       "new-value",
+			wantErr:     true,
+			errContains: "parameter name is required",
+		},
+		{
+			name:        "empty parameter value",
+			paramName:   "/test/param",
+			value:       "",
+			wantErr:     true,
+			errContains: "parameter value is required",
+		},
+		{
 			name:      "parameter not found",
 			paramName: "/test/notfound",
 			value:     "new-value",
@@ -228,7 +273,7 @@ func TestModifyParameter(t *testing.T) {
 				return nil, &types.ParameterNotFound{}
 			},
 			wantErr:     true,
-			errContains: "failed to modify parameter",
+			errContains: "parameter not found",
 		},
 		{
 			name:      "aws error",

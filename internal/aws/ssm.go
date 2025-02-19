@@ -35,7 +35,19 @@ import (
 
 // Common errors returned by the package
 var (
-	ErrEmptyRegion = errors.New("region is required")
+	ErrEmptyRegion     = errors.New("region is required")
+	ErrEmptyName       = errors.New("parameter name is required")
+	ErrEmptyValue      = errors.New("parameter value is required")
+	ErrInvalidType     = errors.New("invalid parameter type")
+	ErrParameterExists = errors.New("parameter already exists")
+	ErrNoAccess        = errors.New("insufficient permissions")
+	ErrNotFound        = errors.New("parameter not found")
+)
+
+// Valid parameter types as defined by AWS SSM
+const (
+	ParameterTypeString       = "String"
+	ParameterTypeSecureString = "SecureString"
 )
 
 // SSMAPI defines the interface for AWS SSM operations.
@@ -96,8 +108,14 @@ var NewClient = DefaultNewClient
 //
 // Returns:
 //   - The parameter value as a string
-//   - An error if the parameter doesn't exist or cannot be retrieved
+//   - ErrEmptyName if name is empty
+//   - ErrNotFound if the parameter doesn't exist
+//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) GetParameter(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		return "", ErrEmptyName
+	}
+
 	withDecryption := true
 	input := &ssm.GetParameterInput{
 		Name:           &name,
@@ -106,6 +124,16 @@ func (c *Client) GetParameter(ctx context.Context, name string) (string, error) 
 
 	output, err := c.SSMClient.GetParameter(ctx, input)
 	if err != nil {
+		var pnf *ssmtypes.ParameterNotFound
+		if errors.As(err, &pnf) {
+			return "", fmt.Errorf("%w: %s", ErrNotFound, name)
+		}
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			if ae.ErrorCode() == "AccessDeniedException" {
+				return "", fmt.Errorf("%w to get parameter %s", ErrNoAccess, name)
+			}
+		}
 		return "", fmt.Errorf("failed to get parameter %s: %w", name, err)
 	}
 
@@ -127,8 +155,23 @@ func (c *Client) GetParameter(ctx context.Context, name string) (string, error) 
 //   - kmsKeyID: Optional KMS key ID for SecureString parameters
 //   - overwrite: Whether to overwrite an existing parameter
 //
-// Returns an error if the parameter cannot be created or if validation fails.
+// Returns:
+//   - ErrEmptyName if name is empty
+//   - ErrEmptyValue if value is empty
+//   - ErrInvalidType if paramType is invalid
+//   - ErrParameterExists if parameter exists and overwrite is false
+//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) CreateParameter(ctx context.Context, name, value, description string, paramType string, kmsKeyID *string, overwrite bool) error {
+	if name == "" {
+		return ErrEmptyName
+	}
+	if value == "" {
+		return ErrEmptyValue
+	}
+	if paramType != ParameterTypeString && paramType != ParameterTypeSecureString {
+		return fmt.Errorf("%w: %s (must be %s or %s)", ErrInvalidType, paramType, ParameterTypeString, ParameterTypeSecureString)
+	}
+
 	input := &ssm.PutParameterInput{
 		Name:        &name,
 		Value:       &value,
@@ -137,12 +180,22 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 		Description: &description,
 	}
 
-	if kmsKeyID != nil {
+	if kmsKeyID != nil && paramType == ParameterTypeSecureString {
 		input.KeyId = kmsKeyID
 	}
 
 	_, err := c.SSMClient.PutParameter(ctx, input)
 	if err != nil {
+		var pae *ssmtypes.ParameterAlreadyExists
+		if errors.As(err, &pae) {
+			return fmt.Errorf("%w: %s", ErrParameterExists, name)
+		}
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			if ae.ErrorCode() == "AccessDeniedException" {
+				return fmt.Errorf("%w to create parameter %s", ErrNoAccess, name)
+			}
+		}
 		return fmt.Errorf("failed to create parameter %s: %w", name, err)
 	}
 
@@ -157,8 +210,19 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 //   - value: The new parameter value
 //   - description: Optional new description (empty string to keep existing)
 //
-// Returns an error if the parameter cannot be modified or doesn't exist.
+// Returns:
+//   - ErrEmptyName if name is empty
+//   - ErrEmptyValue if value is empty
+//   - ErrNotFound if the parameter doesn't exist
+//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) ModifyParameter(ctx context.Context, name, value, description string) error {
+	if name == "" {
+		return ErrEmptyName
+	}
+	if value == "" {
+		return ErrEmptyValue
+	}
+
 	overwrite := true
 	input := &ssm.PutParameterInput{
 		Name:      &name,
@@ -172,6 +236,16 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 
 	_, err := c.SSMClient.PutParameter(ctx, input)
 	if err != nil {
+		var pnf *ssmtypes.ParameterNotFound
+		if errors.As(err, &pnf) {
+			return fmt.Errorf("%w: %s", ErrNotFound, name)
+		}
+		var ae smithy.APIError
+		if errors.As(err, &ae) {
+			if ae.ErrorCode() == "AccessDeniedException" {
+				return fmt.Errorf("%w to modify parameter %s", ErrNoAccess, name)
+			}
+		}
 		return fmt.Errorf("failed to modify parameter %s: %w", name, err)
 	}
 
@@ -184,9 +258,15 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 //   - ctx: Context for the AWS API call
 //   - name: The full path of the parameter to delete
 //
-// Returns an error if the parameter cannot be deleted, doesn't exist,
-// or if there are insufficient permissions.
+// Returns:
+//   - ErrEmptyName if name is empty
+//   - ErrNotFound if the parameter doesn't exist
+//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) DeleteParameter(ctx context.Context, name string) error {
+	if name == "" {
+		return ErrEmptyName
+	}
+
 	input := &ssm.DeleteParameterInput{
 		Name: &name,
 	}
@@ -195,12 +275,12 @@ func (c *Client) DeleteParameter(ctx context.Context, name string) error {
 	if err != nil {
 		var pnf *ssmtypes.ParameterNotFound
 		if errors.As(err, &pnf) {
-			return fmt.Errorf("parameter %s not found", name)
+			return fmt.Errorf("%w: %s", ErrNotFound, name)
 		}
 		var ae smithy.APIError
 		if errors.As(err, &ae) {
 			if ae.ErrorCode() == "AccessDeniedException" {
-				return fmt.Errorf("insufficient permissions to delete parameter %s", name)
+				return fmt.Errorf("%w to delete parameter %s", ErrNoAccess, name)
 			}
 		}
 		return fmt.Errorf("failed to delete parameter %s: %w", name, err)
