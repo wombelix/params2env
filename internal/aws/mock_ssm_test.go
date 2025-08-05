@@ -9,48 +9,26 @@ import (
 	"testing"
 )
 
-func TestMockSSMClientWithoutFunctions(t *testing.T) {
-	tests := []struct {
-		name    string
-		mock    *MockSSMClient
-		wantErr bool
-	}{
-		{
-			name:    "mock_get_parameter_without_function",
-			mock:    &MockSSMClient{},
-			wantErr: true,
-		},
-		{
-			name:    "mock_put_parameter_without_function",
-			mock:    &MockSSMClient{},
-			wantErr: true,
-		},
-		{
-			name:    "mock_delete_parameter_without_function",
-			mock:    &MockSSMClient{},
-			wantErr: true,
-		},
+func TestMockSSMClientGetParameterWithoutFunction(t *testing.T) {
+	mock := &MockSSMClient{}
+	_, err := mock.GetParameter(context.Background(), nil)
+	if err == nil {
+		t.Error("MockSSMClient.GetParameter() expected error, got nil")
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			switch tt.name {
-			case "mock_get_parameter_without_function":
-				_, err := tt.mock.GetParameter(context.Background(), nil)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("MockSSMClient.GetParameter() error = %v, wantErr %v", err, tt.wantErr)
-				}
-			case "mock_put_parameter_without_function":
-				_, err := tt.mock.PutParameter(context.Background(), nil)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("MockSSMClient.PutParameter() error = %v, wantErr %v", err, tt.wantErr)
-				}
-			case "mock_delete_parameter_without_function":
-				_, err := tt.mock.DeleteParameter(context.Background(), nil)
-				if (err != nil) != tt.wantErr {
-					t.Errorf("MockSSMClient.DeleteParameter() error = %v, wantErr %v", err, tt.wantErr)
-				}
-			}
-		})
+func TestMockSSMClientPutParameterWithoutFunction(t *testing.T) {
+	mock := &MockSSMClient{}
+	_, err := mock.PutParameter(context.Background(), nil)
+	if err == nil {
+		t.Error("MockSSMClient.PutParameter() expected error, got nil")
+	}
+}
+
+func TestMockSSMClientDeleteParameterWithoutFunction(t *testing.T) {
+	mock := &MockSSMClient{}
+	_, err := mock.DeleteParameter(context.Background(), nil)
+	if err == nil {
+		t.Error("MockSSMClient.DeleteParameter() expected error, got nil")
 	}
 }
