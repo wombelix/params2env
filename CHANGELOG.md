@@ -1,3 +1,9 @@
+## v0.1.3 (2025-08-05)
+
+### Fix
+
+- **goreleaser**: adjust main path to find compiled params2env
+
 ## v0.1.2 (2025-08-05)
 
 ### Fix
