@@ -11,6 +11,7 @@ SPDX-License-Identifier: CC0-1.0
 
 ## Table of Contents
 
+* [Installation](#installation)
 * [CLI](#cli)
    * [Technical details](#technical-details)
 * [Usage](#usage)
@@ -44,6 +45,13 @@ The tool can run with a yaml configuration file, ~/.params2env.yaml or
 higher precedence than the configuration file in the current directory. The
 configuration file in the current directory has a higher precedence than the
 global configuration file in the home directory.
+
+## Installation
+
+Pre-built binaries for Linux, macOS, and Windows are available on
+the [GitHub Releases](https://github.com/wombelix/params2env/releases) page.
+
+Download the appropriate binary for your platform and add it to your PATH.
 
 ## Usage
 
