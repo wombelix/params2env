@@ -107,9 +107,9 @@ func LoadConfig() (*Config, error) {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid home config path detected\n")
 		} else if fileExists(homeConfig) {
 			if err := loadFile(homeConfig, &cfg); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", filepath.Base(homeConfig))
+				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", sanitizeForLog(filepath.Base(homeConfig)))
 			} else if err := cfg.Validate(); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", filepath.Base(homeConfig))
+				fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", sanitizeForLog(filepath.Base(homeConfig)))
 				cfg = Config{} // Reset to empty config if validation fails
 			}
 		}
@@ -120,9 +120,9 @@ func LoadConfig() (*Config, error) {
 	if fileExists(cwdConfig) {
 		localCfg := Config{}
 		if err := loadFile(cwdConfig, &localCfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", filepath.Base(cwdConfig))
+			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", sanitizeForLog(filepath.Base(cwdConfig)))
 		} else if err := localCfg.Validate(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", filepath.Base(cwdConfig))
+			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", sanitizeForLog(filepath.Base(cwdConfig)))
 		} else {
 			mergeConfig(&cfg, &localCfg)
 		}
@@ -187,4 +187,9 @@ func mergeConfig(global, local *Config) {
 	if len(local.Params) > 0 {
 		global.Params = local.Params
 	}
+}
+
+// sanitizeForLog removes control characters that could be used for log injection
+func sanitizeForLog(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
 }
