@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -101,12 +102,10 @@ func LoadConfig() (*Config, error) {
 		// Clean and validate home directory path
 		home = filepath.Clean(home)
 		homeConfig := filepath.Join(home, ".params2env.yaml")
-		// Ensure the config file is within the home directory
-		expectedPath := filepath.Join(home, ".params2env.yaml")
-		if homeConfig != expectedPath {
+		// Validate path is within home directory to prevent traversal
+		if rel, err := filepath.Rel(home, homeConfig); err != nil || strings.Contains(rel, "..") {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid home config path detected\n")
-		} else
-		if fileExists(homeConfig) {
+		} else if fileExists(homeConfig) {
 			if err := loadFile(homeConfig, &cfg); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", filepath.Base(homeConfig))
 			} else if err := cfg.Validate(); err != nil {
