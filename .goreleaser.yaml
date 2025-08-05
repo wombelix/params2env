@@ -6,7 +6,7 @@ version: 2
 project_name: params2env
 
 builds:
-  - main: ./cmd/params2env
+  - main: .
     binary: params2env
     env:
       - CGO_ENABLED=0
