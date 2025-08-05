@@ -11,22 +11,48 @@ import (
 	"testing"
 )
 
-func TestLoadConfig(t *testing.T) {
-	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "params2env-test")
+type testEnv struct {
+	tmpDir   string
+	origHome string
+	origWd   string
+}
+
+func setupTestEnv(t *testing.T, prefix string) *testEnv {
+	tmpDir, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
-	// Save current home directory and restore it after test
 	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
 	os.Setenv("HOME", tmpDir)
 
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	return &testEnv{
+		tmpDir:   tmpDir,
+		origHome: origHome,
+		origWd:   origWd,
+	}
+}
+
+func (te *testEnv) cleanup(t *testing.T) {
+	_ = os.RemoveAll(te.tmpDir)
+	_ = os.Setenv("HOME", te.origHome)
+	if err := os.Chdir(te.origWd); err != nil {
+		t.Errorf("Failed to change back to original directory: %v", err)
+	}
+}
+
+func TestLoadConfig(t *testing.T) {
+	te := setupTestEnv(t, "params2env-test")
+	defer te.cleanup(t)
+
 	// Create test files
-	homeConfig := filepath.Join(tmpDir, ".params2env.yaml")
-	localConfig := filepath.Join(tmpDir, "work", ".params2env.yaml")
+	homeConfig := filepath.Join(te.tmpDir, ".params2env.yaml")
+	localConfig := filepath.Join(te.tmpDir, "work", ".params2env.yaml")
 
 	// Create home config
 	homeContent := []byte(`
@@ -49,7 +75,7 @@ params:
 	}
 
 	// Create local config directory and file
-	if err := os.MkdirAll(filepath.Join(tmpDir, "work"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(te.tmpDir, "work"), 0755); err != nil {
 		t.Fatalf("Failed to create work dir: %v", err)
 	}
 
@@ -68,16 +94,7 @@ params:
 	}
 
 	// Change to work directory for test
-	origWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(origWd); err != nil {
-			t.Errorf("Failed to change back to original directory: %v", err)
-		}
-	}()
-	if err := os.Chdir(filepath.Join(tmpDir, "work")); err != nil {
+	if err := os.Chdir(filepath.Join(te.tmpDir, "work")); err != nil {
 		t.Fatalf("Failed to change to work directory: %v", err)
 	}
 
@@ -125,29 +142,11 @@ params:
 }
 
 func TestLoadConfigNoFiles(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "params2env-test-nofiles")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Save current home directory and restore it after test
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-	os.Setenv("HOME", tmpDir)
+	te := setupTestEnv(t, "params2env-test-nofiles")
+	defer te.cleanup(t)
 
 	// Change to temp directory
-	origWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(origWd); err != nil {
-			t.Errorf("Failed to change back to original directory: %v", err)
-		}
-	}()
-	if err := os.Chdir(tmpDir); err != nil {
+	if err := os.Chdir(te.tmpDir); err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
@@ -162,20 +161,11 @@ func TestLoadConfigNoFiles(t *testing.T) {
 }
 
 func TestLoadConfigInvalidYAML(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "params2env-test-invalid")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Save current home directory and restore it after test
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-	os.Setenv("HOME", tmpDir)
+	te := setupTestEnv(t, "params2env-test-invalid")
+	defer te.cleanup(t)
 
 	// Create invalid config files
-	homeConfig := filepath.Join(tmpDir, ".params2env.yaml")
+	homeConfig := filepath.Join(te.tmpDir, ".params2env.yaml")
 
 	invalidContent := []byte(`
 region: [invalid yaml
@@ -185,24 +175,15 @@ region: [invalid yaml
 	}
 
 	// Create work directory and local config
-	if err := os.MkdirAll(filepath.Join(tmpDir, "work"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(te.tmpDir, "work"), 0755); err != nil {
 		t.Fatalf("Failed to create work directory: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "work", ".params2env.yaml"), invalidContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(te.tmpDir, "work", ".params2env.yaml"), invalidContent, 0644); err != nil {
 		t.Fatalf("Failed to write invalid local config: %v", err)
 	}
 
 	// Change to work directory
-	origWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(origWd); err != nil {
-			t.Errorf("Failed to change back to original directory: %v", err)
-		}
-	}()
-	if err := os.Chdir(filepath.Join(tmpDir, "work")); err != nil {
+	if err := os.Chdir(filepath.Join(te.tmpDir, "work")); err != nil {
 		t.Fatalf("Failed to change to work directory: %v", err)
 	}
 
@@ -217,7 +198,6 @@ region: [invalid yaml
 }
 
 func TestLoadConfigHomeError(t *testing.T) {
-	// Save current home directory and restore it after test
 	origHome := os.Getenv("HOME")
 	defer os.Setenv("HOME", origHome)
 	os.Unsetenv("HOME")
@@ -233,20 +213,11 @@ func TestLoadConfigHomeError(t *testing.T) {
 }
 
 func TestLoadConfigFilePermissionError(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "params2env-test-perms")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Save current home directory and restore it after test
-	origHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", origHome)
-	os.Setenv("HOME", tmpDir)
+	te := setupTestEnv(t, "params2env-test-perms")
+	defer te.cleanup(t)
 
 	// Create config file with no read permissions
-	configPath := filepath.Join(tmpDir, ".params2env.yaml")
+	configPath := filepath.Join(te.tmpDir, ".params2env.yaml")
 	if err := os.WriteFile(configPath, []byte("region: us-west-2"), 0000); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
