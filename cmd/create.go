@@ -13,6 +13,7 @@ import (
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"git.sr.ht/~wombelix/params2env/internal/config"
+	"git.sr.ht/~wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -60,14 +61,43 @@ Examples:
 	RunE:    runCreate,
 }
 
-// validateCreateFlags checks if all required flags are set
+// validateCreateFlags checks if all required flags are set and valid
 func validateCreateFlags(cmd *cobra.Command, args []string) error {
 	if createPath == "" {
 		return fmt.Errorf("required flag \"path\" not set")
 	}
+	if err := validation.ValidateParameterPath(createPath); err != nil {
+		return err
+	}
+
 	if createValue == "" {
 		return fmt.Errorf("required flag \"value\" not set")
 	}
+
+	if createRegion != "" {
+		if err := validation.ValidateRegion(createRegion); err != nil {
+			return err
+		}
+	}
+
+	if createReplica != "" {
+		if err := validation.ValidateRegion(createReplica); err != nil {
+			return fmt.Errorf("invalid replica region: %w", err)
+		}
+	}
+
+	if createRole != "" {
+		if err := validation.ValidateRoleARN(createRole); err != nil {
+			return err
+		}
+	}
+
+	if createKMS != "" {
+		if err := validation.ValidateKMSKey(createKMS); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

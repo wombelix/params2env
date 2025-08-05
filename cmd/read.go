@@ -14,6 +14,7 @@ import (
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"git.sr.ht/~wombelix/params2env/internal/config"
+	"git.sr.ht/~wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -60,18 +61,27 @@ Examples:
 	RunE:    runRead,
 }
 
-// validateReadFlags checks if required flags are set or parameters are defined in config
+// validateReadFlags checks if all required flags are set and valid
 func validateReadFlags(cmd *cobra.Command, args []string) error {
-	// Load configuration to check for params
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
+	if readPath == "" {
+		return fmt.Errorf("required flag \"path\" not set")
+	}
+	if err := validation.ValidateParameterPath(readPath); err != nil {
+		return err
 	}
 
-	// Only require path if no params are defined in config
-	if readPath == "" && (cfg == nil || len(cfg.Params) == 0) {
-		return fmt.Errorf("required flag \"path\" not set and no parameters defined in config")
+	if readRegion != "" {
+		if err := validation.ValidateRegion(readRegion); err != nil {
+			return err
+		}
 	}
+
+	if readRole != "" {
+		if err := validation.ValidateRoleARN(readRole); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

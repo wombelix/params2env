@@ -12,6 +12,7 @@ import (
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"git.sr.ht/~wombelix/params2env/internal/config"
+	"git.sr.ht/~wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -49,11 +50,33 @@ Examples:
 	RunE:    runDelete,
 }
 
-// validateDeleteFlags checks if all required flags are set
+// validateDeleteFlags checks if all required flags are set and valid
 func validateDeleteFlags(cmd *cobra.Command, args []string) error {
 	if deletePath == "" {
 		return fmt.Errorf("required flag \"path\" not set")
 	}
+	if err := validation.ValidateParameterPath(deletePath); err != nil {
+		return err
+	}
+
+	if deleteRegion != "" {
+		if err := validation.ValidateRegion(deleteRegion); err != nil {
+			return err
+		}
+	}
+
+	if deleteReplica != "" {
+		if err := validation.ValidateRegion(deleteReplica); err != nil {
+			return fmt.Errorf("invalid replica region: %w", err)
+		}
+	}
+
+	if deleteRole != "" {
+		if err := validation.ValidateRoleARN(deleteRole); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
