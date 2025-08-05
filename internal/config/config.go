@@ -108,7 +108,7 @@ func LoadConfig() (*Config, error) {
 		} else
 		if fileExists(homeConfig) {
 			if err := loadFile(homeConfig, &cfg); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s: %v\n", filepath.Base(homeConfig), err)
+				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", filepath.Base(homeConfig))
 			} else if err := cfg.Validate(); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", filepath.Base(homeConfig))
 				cfg = Config{} // Reset to empty config if validation fails
@@ -121,7 +121,7 @@ func LoadConfig() (*Config, error) {
 	if fileExists(cwdConfig) {
 		localCfg := Config{}
 		if err := loadFile(cwdConfig, &localCfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s: %v\n", filepath.Base(cwdConfig), err)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", filepath.Base(cwdConfig))
 		} else if err := localCfg.Validate(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", filepath.Base(cwdConfig))
 		} else {
