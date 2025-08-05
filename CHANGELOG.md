@@ -1,3 +1,10 @@
+## v0.1.4 (2025-08-05)
+
+### Fix
+
+- Add suppression comments for false positive security warnings
+- security vulnerabilities and code quality issues
+
 ## v0.1.3 (2025-08-05)
 
 ### Fix
