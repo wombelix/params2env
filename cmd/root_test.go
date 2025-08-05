@@ -16,14 +16,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
-func TestExecute(t *testing.T) {
+func setupExecuteTest(t *testing.T) func() {
 	// Save original osExit and restore after tests
 	origOsExit := osExit
-	defer func() { osExit = origOsExit }()
-
 	// Save and restore environment
 	origRegion := os.Getenv("AWS_REGION")
-	defer func() { os.Setenv("AWS_REGION", origRegion) }()
 	os.Setenv("AWS_REGION", "eu-central-1")
 
 	// Override osExit for testing
@@ -53,88 +50,71 @@ func TestExecute(t *testing.T) {
 
 	// Save original NewClient and restore after tests
 	origNewClient := aws.NewClient
-	defer func() { aws.NewClient = origNewClient }()
-
 	// Override NewClient for testing
 	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 		return &aws.Client{SSMClient: mockClient}, nil
 	}
+
+	return func() {
+		osExit = origOsExit
+		_ = os.Setenv("AWS_REGION", origRegion)
+		aws.NewClient = origNewClient
+	}
+}
+
+func setupRootCmd() {
+	rootCmd.ResetFlags()
+	rootCmd.ResetCommands()
+	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
+	rootCmd.AddCommand(readCmd)
+	rootCmd.AddCommand(createCmd)
+	rootCmd.AddCommand(modifyCmd)
+	rootCmd.AddCommand(deleteCmd)
+}
+
+func TestExecuteVersion(t *testing.T) {
+	cleanup := setupExecuteTest(t)
+	defer cleanup()
+	setupRootCmd()
+	rootCmd.SetArgs([]string{"--version"})
+	if err := Execute(); err != nil {
+		t.Errorf("Execute() error = %v, wantErr false", err)
+	}
+}
+
+func TestExecuteHelp(t *testing.T) {
+	cleanup := setupExecuteTest(t)
+	defer cleanup()
+	setupRootCmd()
+	rootCmd.SetArgs([]string{"--help"})
+	if err := Execute(); err != nil {
+		t.Errorf("Execute() error = %v, wantErr false", err)
+	}
+}
+
+func TestExecuteSubcommands(t *testing.T) {
+	cleanup := setupExecuteTest(t)
+	defer cleanup()
 
 	tests := []struct {
 		name    string
 		args    []string
 		wantErr bool
 	}{
-		{
-			name:    "show_version",
-			args:    []string{"--version"},
-			wantErr: false,
-		},
-		{
-			name:    "show_help",
-			args:    []string{"--help"},
-			wantErr: false,
-		},
-		{
-			name:    "no_subcommand",
-			args:    []string{},
-			wantErr: false,
-		},
-		{
-			name:    "unknown_subcommand",
-			args:    []string{"unknown"},
-			wantErr: true,
-		},
-		{
-			name:    "valid_subcommand_read",
-			args:    []string{"read", "--path", "/test/param"},
-			wantErr: false,
-		},
-		{
-			name:    "valid_subcommand_create",
-			args:    []string{"create", "--path", "/test/param", "--value", "test"},
-			wantErr: false,
-		},
-		{
-			name:    "valid_subcommand_modify",
-			args:    []string{"modify", "--path", "/test/param", "--value", "test"},
-			wantErr: false,
-		},
-		{
-			name:    "valid_subcommand_delete",
-			args:    []string{"delete", "--path", "/test/param"},
-			wantErr: false,
-		},
-		{
-			name:    "invalid_loglevel",
-			args:    []string{"--loglevel", "invalid"},
-			wantErr: false,
-		},
-		{
-			name:    "invalid_flag",
-			args:    []string{"--invalid"},
-			wantErr: true,
-		},
+		{"read", []string{"read", "--path", "/test/param"}, false},
+		{"create", []string{"create", "--path", "/test/param", "--value", "test"}, false},
+		{"modify", []string{"modify", "--path", "/test/param", "--value", "test"}, false},
+		{"delete", []string{"delete", "--path", "/test/param"}, false},
+		{"unknown", []string{"unknown"}, true},
+		{"invalid_flag", []string{"--invalid"}, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset flags and commands
-			rootCmd.ResetFlags()
-			rootCmd.ResetCommands()
-			rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
-			rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
-			rootCmd.AddCommand(readCmd)
-			rootCmd.AddCommand(createCmd)
-			rootCmd.AddCommand(modifyCmd)
-			rootCmd.AddCommand(deleteCmd)
-
-			// Set args
+			setupRootCmd()
 			rootCmd.SetArgs(tt.args)
-
-			// Execute command
 			err := Execute()
-
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
