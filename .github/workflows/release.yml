@@ -31,7 +31,9 @@ jobs:
 
       - name: Checkout specific tag for manual dispatch
         if: github.event_name == 'workflow_dispatch'
-        run: git checkout ${{ github.event.inputs.version }}
+        env:
+          VERSION_TAG: ${{ github.event.inputs.version }}
+        run: git checkout "$VERSION_TAG"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
