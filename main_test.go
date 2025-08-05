@@ -50,14 +50,17 @@ func TestMain(t *testing.T) {
 			os.Args = tt.args
 
 			// Capture stdout
-			r, w, _ := os.Pipe()
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("Failed to create pipe: %v", err)
+			}
 			os.Stdout = w
 
 			// Run main and capture error
-			var err error
+			var execErr error
 			done := make(chan bool)
 			go func() {
-				err = cmd.Execute()
+				execErr = cmd.Execute()
 				w.Close()
 				done <- true
 			}()
@@ -73,8 +76,8 @@ func TestMain(t *testing.T) {
 			}
 
 			// Check error condition
-			if (err != nil) != tt.wantErr {
-				t.Errorf("main() error = %v, wantErr %v", err, tt.wantErr)
+			if (execErr != nil) != tt.wantErr {
+				t.Errorf("main() error = %v, wantErr %v", execErr, tt.wantErr)
 			}
 
 			// For version and help flags, verify we got some output

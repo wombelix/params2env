@@ -106,7 +106,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	// Merge config with flags (flags take precedence)

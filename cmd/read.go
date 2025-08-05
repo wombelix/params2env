@@ -208,7 +208,7 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 		if errors.Is(err, aws.ErrNotFound) {
 			return "", fmt.Errorf("parameter '%s' not found in region '%s'", paramName, region)
 		}
-		return "", fmt.Errorf("failed to get parameter %s: %w", paramName, err)
+		return "", fmt.Errorf("failed to get parameter '%s' from region '%s': %w", paramName, region, err)
 	}
 
 	return value, nil
