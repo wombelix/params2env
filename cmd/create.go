@@ -222,17 +222,21 @@ func createInReplicaRegion() error {
 
 // getReplicaKMSKeyID returns the KMS key ID for the replica region
 func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) *string {
+	// If not an ARN, use the key ID as is
+	if !strings.HasPrefix(kmsKeyID, "arn:aws:kms:") {
+		return &kmsKeyID
+	}
+
 	// Extract account ID and key ID from the ARN
 	arnParts := strings.Split(kmsKeyID, ":")
-	if len(arnParts) >= 6 && strings.HasPrefix(kmsKeyID, "arn:aws:kms:") {
-		accountID := arnParts[4]
-		keyID := strings.TrimPrefix(arnParts[5], "key/")
-		// Create new ARN for replica region
-		replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", replicaRegion, accountID, keyID)
-		return &replicaARN
+	if len(arnParts) < 6 {
+		return &kmsKeyID
 	}
-	// If not an ARN, use the key ID as is
-	return &kmsKeyID
+
+	accountID := arnParts[4]
+	keyID := strings.TrimPrefix(arnParts[5], "key/")
+	replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", replicaRegion, accountID, keyID)
+	return &replicaARN
 }
 
 func init() {
