@@ -1,3 +1,9 @@
+## v0.1.1 (2025-08-05)
+
+### Fix
+
+- update .goreleaser.yaml to v2 format
+
 ## v0.1.0 (2025-08-05)
 
 ### Feat
