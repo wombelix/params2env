@@ -19,6 +19,19 @@ type modifyFlags struct {
 	description string
 }
 
+func setupModifyFlags(t *testing.T) {
+	// Reset flags before each test
+	modifyCmd.ResetFlags()
+	modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
+	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
+	modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
+	modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region")
+	modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN")
+	modifyCmd.Flags().StringVar(&modifyReplica, "replica", "", "Replica region")
+	// Add modify command to test root
+	testRoot.AddCommand(modifyCmd)
+}
+
 func TestRunModify(t *testing.T) {
 	ts := setupTest(t)
 	defer ts.cleanup()
@@ -53,18 +66,7 @@ func TestRunModify(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.output.Reset()
-
-			// Reset flags before each test
-			modifyCmd.ResetFlags()
-			modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
-			modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
-			modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
-			modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region")
-			modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN")
-			modifyCmd.Flags().StringVar(&modifyReplica, "replica", "", "Replica region")
-
-			// Add modify command to test root
-			testRoot.AddCommand(modifyCmd)
+			setupModifyFlags(t)
 
 			// Build args
 			args := buildArgs("modify", map[string]string{
@@ -107,18 +109,7 @@ func TestRunModifyWithConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.output.Reset()
-
-			// Reset flags before each test
-			modifyCmd.ResetFlags()
-			modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
-			modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
-			modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
-			modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region")
-			modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN")
-			modifyCmd.Flags().StringVar(&modifyReplica, "replica", "", "Replica region")
-
-			// Add modify command to test root
-			testRoot.AddCommand(modifyCmd)
+			setupModifyFlags(t)
 
 			// Build args
 			args := buildArgs("modify", map[string]string{
