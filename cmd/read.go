@@ -63,11 +63,18 @@ Examples:
 
 // validateReadFlags checks if all required flags are set and valid
 func validateReadFlags(cmd *cobra.Command, args []string) error {
-	if readPath == "" {
+	// Load config to check if parameters are defined
+	cfg, _ := config.LoadConfig()
+
+	// Path is required only if no parameters are defined in config
+	if readPath == "" && (cfg == nil || len(cfg.Params) == 0) {
 		return fmt.Errorf("required flag \"path\" not set")
 	}
-	if err := validation.ValidateParameterPath(readPath); err != nil {
-		return err
+
+	if readPath != "" {
+		if err := validation.ValidateParameterPath(readPath); err != nil {
+			return err
+		}
 	}
 
 	if readRegion != "" {
@@ -98,11 +105,7 @@ func runRead(cmd *cobra.Command, args []string) error {
 		return handleConfigParameters(cfg)
 	}
 
-	// If path is set, handle single parameter case
-	if readPath == "" {
-		return fmt.Errorf("required flag \"path\" not set and no parameters defined in config")
-	}
-
+	// Handle single parameter case
 	return handleSingleParameter(cfg)
 }
 
