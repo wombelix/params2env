@@ -184,7 +184,7 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 		input.KeyId = kmsKeyID
 	}
 
-	_, err := c.SSMClient.PutParameter(ctx, input)
+	output, err := c.SSMClient.PutParameter(ctx, input)
 	if err != nil {
 		var pae *ssmtypes.ParameterAlreadyExists
 		if errors.As(err, &pae) {
@@ -197,6 +197,9 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 			}
 		}
 		return fmt.Errorf("failed to create parameter %s: %w", name, err)
+	}
+	if output == nil {
+		return fmt.Errorf("received nil output when creating parameter %s", name)
 	}
 
 	return nil
@@ -234,7 +237,7 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 		input.Description = &description
 	}
 
-	_, err := c.SSMClient.PutParameter(ctx, input)
+	output, err := c.SSMClient.PutParameter(ctx, input)
 	if err != nil {
 		var pnf *ssmtypes.ParameterNotFound
 		if errors.As(err, &pnf) {
@@ -247,6 +250,9 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 			}
 		}
 		return fmt.Errorf("failed to modify parameter %s: %w", name, err)
+	}
+	if output == nil {
+		return fmt.Errorf("received nil output when modifying parameter %s", name)
 	}
 
 	return nil
