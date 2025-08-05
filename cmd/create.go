@@ -233,9 +233,7 @@ func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) *string {
 		return &kmsKeyID
 	}
 
-	accountID := arnParts[4]
-	keyID := strings.TrimPrefix(arnParts[5], "key/")
-	replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", replicaRegion, accountID, keyID)
+	replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:%s", replicaRegion, arnParts[4], arnParts[5])
 	return &replicaARN
 }
 
