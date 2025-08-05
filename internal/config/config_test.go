@@ -39,8 +39,12 @@ func setupTestEnv(t *testing.T, prefix string) *testEnv {
 }
 
 func (te *testEnv) cleanup(t *testing.T) {
-	_ = os.RemoveAll(te.tmpDir)
-	_ = os.Setenv("HOME", te.origHome)
+	if err := os.RemoveAll(te.tmpDir); err != nil {
+		t.Errorf("Failed to remove temp directory: %v", err)
+	}
+	if err := os.Setenv("HOME", te.origHome); err != nil {
+		t.Errorf("Failed to restore HOME environment variable: %v", err)
+	}
 	if err := os.Chdir(te.origWd); err != nil {
 		t.Errorf("Failed to change back to original directory: %v", err)
 	}
