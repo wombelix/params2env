@@ -92,7 +92,7 @@ Result:
 ~/.my-secret
 
 ```bash
-export MY_SECRET="S3cr3t"
+export MY_SECRET="value_of_secure_string"
 ```
 
 When `--output` is set to `env` or removed from the arguments, the output needs
@@ -110,7 +110,7 @@ source <(params2env read --path "/my/secret")
 This will set the environment variable in your current shell:
 
 ```bash
-MY_SECRET="S3cr3t"
+MY_SECRET="value_of_secure_string"
 ```
 
 ### Subcommand: create
@@ -233,7 +233,7 @@ params2env read
 # Result:
 export APP_DB_URL="postgresql://db.example.com:5432"
 export APP_DB_USER="dbuser"
-export APP_DB_PASSWORD="secret"
+export APP_DB_PASSWORD="dbpass"
 
 # Write all parameters to file
 params2env read --file ~/.env
