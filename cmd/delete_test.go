@@ -21,6 +21,12 @@ type deleteFlags struct {
 }
 
 func setupDeleteFlags(t *testing.T) {
+	// Reset global variables
+	deletePath = ""
+	deleteRegion = ""
+	deleteRole = ""
+	deleteReplica = ""
+
 	deleteCmd.ResetFlags()
 	deleteCmd.Flags().StringVar(&deletePath, "path", "", "Parameter path (required)")
 	deleteCmd.Flags().StringVar(&deleteRegion, "region", "", "AWS region (optional)")
@@ -65,11 +71,7 @@ func TestRunDelete(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		{
-			name:    "missing_path",
-			flags:   deleteFlags{},
-			wantErr: true,
-		},
+
 		{
 			name: "basic_delete",
 			flags: deleteFlags{
@@ -97,6 +99,7 @@ func TestRunDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			runDeleteTest(t, ts, tt, func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
 				switch tt.name {
 				case "parameter_not_found":
@@ -116,8 +119,11 @@ func runDeleteTest(t *testing.T, ts *testSetup, tt struct {
 }, mockFunc func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)) {
 	ts.output.Reset()
 
-	mockClient := &aws.MockSSMClient{DeleteParamFunc: mockFunc}
-	ts.setupMockClient(mockClient)
+	// Only setup mock client if we expect the command to reach AWS operations
+	if tt.name != "missing_path" {
+		mockClient := &aws.MockSSMClient{DeleteParamFunc: mockFunc}
+		ts.setupMockClient(mockClient)
+	}
 
 	args := buildArgs("delete", map[string]string{
 		"path":    tt.flags.path,
@@ -131,6 +137,20 @@ func runDeleteTest(t *testing.T, ts *testSetup, tt struct {
 
 	if (err != nil) != tt.wantErr {
 		t.Errorf("RunDelete() error = %v, wantErr %v", err, tt.wantErr)
+	}
+}
+
+func TestRunDeleteMissingPath(t *testing.T) {
+	ts := setupDeleteTest(t)
+	defer ts.cleanup()
+
+	ts.output.Reset()
+	args := []string{"delete"}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	if err == nil {
+		t.Errorf("Expected error for missing path, but got nil")
 	}
 }
 
