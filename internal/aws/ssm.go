@@ -223,11 +223,11 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 		return ErrEmptyValue
 	}
 
-	overwrite := true
+	allowOverwrite := true
 	input := &ssm.PutParameterInput{
 		Name:      &name,
 		Value:     &value,
-		Overwrite: &overwrite,
+		Overwrite: &allowOverwrite,
 	}
 
 	if description != "" {
