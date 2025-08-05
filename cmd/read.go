@@ -64,7 +64,10 @@ Examples:
 // validateReadFlags checks if all required flags are set and valid
 func validateReadFlags(cmd *cobra.Command, args []string) error {
 	// Load config to check if parameters are defined
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
 
 	// Path is required only if no parameters are defined in config
 	if readPath == "" && (cfg == nil || len(cfg.Params) == 0) {
