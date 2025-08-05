@@ -106,6 +106,8 @@ func LoadConfig() (*Config, error) {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid home directory path detected\n")
 		} else {
 			const configFileName = ".params2env.yaml"
+				// nosemgrep: go-file-read-taint
+			// False positive: extensive path validation prevents traversal attacks
 			homeConfig := filepath.Join(home, configFileName)
 			// Additional validation that the joined path is still within home
 			cleanPath := filepath.Clean(homeConfig)
@@ -114,8 +116,12 @@ func LoadConfig() (*Config, error) {
 			} else if fileExists(cleanPath) {
 				homeConfig = cleanPath
 				if err := loadFile(homeConfig, &cfg); err != nil {
+					// nosemgrep: go-log-injection-ide
+					// False positive: input is sanitized via sanitizeForLog function
 					fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", sanitizeForLog(homeConfig))
 				} else if err := cfg.Validate(); err != nil {
+					// nosemgrep: go-log-injection-ide
+					// False positive: input is sanitized via sanitizeForLog function
 					fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", sanitizeForLog(homeConfig))
 					cfg = Config{} // Reset to empty config if validation fails
 				}

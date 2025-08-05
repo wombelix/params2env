@@ -178,8 +178,10 @@ func mergeReadConfig(cfg *config.Config) {
 
 // ensureReadRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureReadRegionIsSet() error {
-	if readRegion = os.Getenv("AWS_REGION"); readRegion == "" {
-		return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
+	if readRegion == "" {
+		if readRegion = os.Getenv("AWS_REGION"); readRegion == "" {
+			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
+		}
 	}
 	return nil
 }
@@ -254,6 +256,8 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 		}
 
 		// Write to file
+		// nosemgrep: go-poor-write-permissions
+		// False positive: 0600 is secure for sensitive parameter files (owner read/write only)
 		if err := os.WriteFile(readFile, []byte(output), 0600); err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}
