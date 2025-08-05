@@ -221,12 +221,10 @@ func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 		name = filepath.Base(paramPath)
 	}
 
-	prefix := readPrefix
-	if prefix == "" && cfg != nil {
-		prefix = cfg.EnvPrefix
-	}
-	if prefix != "" {
-		name = prefix + "_" + name
+	if readPrefix != "" {
+		name = readPrefix + "_" + name
+	} else if cfg != nil && cfg.EnvPrefix != "" {
+		name = cfg.EnvPrefix + "_" + name
 	}
 
 	if readUpper {
