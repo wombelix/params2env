@@ -112,11 +112,13 @@ func TestRunDelete(t *testing.T) {
 	}
 }
 
-func runDeleteTest(t *testing.T, ts *testSetup, tt struct {
+type deleteTestCase struct {
 	name    string
 	flags   deleteFlags
 	wantErr bool
-}, mockFunc func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)) {
+}
+
+func runDeleteTest(t *testing.T, ts *testSetup, tt deleteTestCase, mockFunc func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)) {
 	ts.output.Reset()
 
 	// Only setup mock client if we expect the command to reach AWS operations
