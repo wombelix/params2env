@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+version: 2
 project_name: params2env
 
 builds:
@@ -20,20 +21,11 @@ builds:
       - -s -w -X "main.version={{ .Version }}" -X "main.commit={{ .FullCommit }}" -X "main.date={{ .Date }}"
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     wrap_in_directory: true
-    goos:
-      - linux
-      - darwin
-    files:
-      - README.md
-      - CHANGELOG.md
-      - CHANGELOG.md.license
-      - LICENSES/*
-  - format: zip
-    wrap_in_directory: true
-    goos:
-      - windows
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     files:
       - README.md
       - CHANGELOG.md
@@ -73,6 +65,3 @@ release:
   github:
     owner: wombelix
     name: params2env
-    draft: false
-    mode: append
-    name_template: "{{ .ProjectName }}-v{{ .Version }}"
