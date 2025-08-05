@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
-	"git.sr.ht/~wombelix/params2env/internal/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
@@ -21,8 +20,26 @@ type deleteFlags struct {
 	replica string
 }
 
-func TestRunDelete(t *testing.T) {
+func setupDeleteFlags(t *testing.T) {
+	deleteCmd.ResetFlags()
+	deleteCmd.Flags().StringVar(&deletePath, "path", "", "Parameter path (required)")
+	deleteCmd.Flags().StringVar(&deleteRegion, "region", "", "AWS region (optional)")
+	deleteCmd.Flags().StringVar(&deleteRole, "role", "", "AWS role ARN to assume (optional)")
+	deleteCmd.Flags().StringVar(&deleteReplica, "replica", "", "Region to delete the replica from")
+	if err := deleteCmd.MarkFlagRequired("path"); err != nil {
+		t.Fatalf("Failed to mark path flag as required: %v", err)
+	}
+	testRoot.AddCommand(deleteCmd)
+}
+
+func setupDeleteTest(t *testing.T) *testSetup {
 	ts := setupTest(t)
+	setupDeleteFlags(t)
+	return ts
+}
+
+func TestRunDelete(t *testing.T) {
+	ts := setupDeleteTest(t)
 	defer ts.cleanup()
 
 	tests := []struct {
@@ -80,55 +97,45 @@ func TestRunDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts.output.Reset()
-
-			// Create mock AWS client with test-specific behavior
-			mockClient := &aws.MockSSMClient{
-				DeleteParamFunc: func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
-					switch tt.name {
-					case "parameter_not_found":
-						return nil, &types.ParameterNotFound{}
-					default:
-						return &ssm.DeleteParameterOutput{}, nil
-					}
-				},
-			}
-
-			ts.setupMockClient(mockClient)
-
-			// Reset flags before each test
-			deleteCmd.ResetFlags()
-			deleteCmd.Flags().StringVar(&deletePath, "path", "", "Parameter path (required)")
-			deleteCmd.Flags().StringVar(&deleteRegion, "region", "", "AWS region (optional)")
-			deleteCmd.Flags().StringVar(&deleteRole, "role", "", "AWS role ARN to assume (optional)")
-			deleteCmd.Flags().StringVar(&deleteReplica, "replica", "", "Region to delete the replica from")
-			if err := deleteCmd.MarkFlagRequired("path"); err != nil {
-				t.Fatalf("Failed to mark path flag as required: %v", err)
-			}
-
-			// Add delete command to test root
-			testRoot.AddCommand(deleteCmd)
-
-			// Build args
-			args := buildArgs("delete", map[string]string{
-				"path":    tt.flags.path,
-				"region":  tt.flags.region,
-				"role":    tt.flags.role,
-				"replica": tt.flags.replica,
+			runDeleteTest(t, ts, tt, func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
+				switch tt.name {
+				case "parameter_not_found":
+					return nil, &types.ParameterNotFound{}
+				default:
+					return &ssm.DeleteParameterOutput{}, nil
+				}
 			})
-
-			testRoot.SetArgs(args)
-			err := testRoot.Execute()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RunDelete() error = %v, wantErr %v", err, tt.wantErr)
-			}
 		})
 	}
 }
 
+func runDeleteTest(t *testing.T, ts *testSetup, tt struct {
+	name    string
+	flags   deleteFlags
+	wantErr bool
+}, mockFunc func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)) {
+	ts.output.Reset()
+
+	mockClient := &aws.MockSSMClient{DeleteParamFunc: mockFunc}
+	ts.setupMockClient(mockClient)
+
+	args := buildArgs("delete", map[string]string{
+		"path":    tt.flags.path,
+		"region":  tt.flags.region,
+		"role":    tt.flags.role,
+		"replica": tt.flags.replica,
+	})
+
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	if (err != nil) != tt.wantErr {
+		t.Errorf("RunDelete() error = %v, wantErr %v", err, tt.wantErr)
+	}
+}
+
 func TestRunDeleteWithConfig(t *testing.T) {
-	ts := setupTest(t)
+	ts := setupDeleteTest(t)
 	defer ts.cleanup()
 
 	configContent := []byte(`
@@ -140,7 +147,6 @@ replica: eu-west-1
 
 	tests := []struct {
 		name    string
-		cfg     *config.Config
 		flags   deleteFlags
 		wantErr bool
 	}{
@@ -158,44 +164,9 @@ replica: eu-west-1
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts.output.Reset()
-
-			// Create mock AWS client with test-specific behavior
-			mockClient := &aws.MockSSMClient{
-				DeleteParamFunc: func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
-					return &ssm.DeleteParameterOutput{}, nil
-				},
-			}
-
-			ts.setupMockClient(mockClient)
-
-			// Reset flags before each test
-			deleteCmd.ResetFlags()
-			deleteCmd.Flags().StringVar(&deletePath, "path", "", "Parameter path (required)")
-			deleteCmd.Flags().StringVar(&deleteRegion, "region", "", "AWS region (optional)")
-			deleteCmd.Flags().StringVar(&deleteRole, "role", "", "AWS role ARN to assume (optional)")
-			deleteCmd.Flags().StringVar(&deleteReplica, "replica", "", "Region to delete the replica from")
-			if err := deleteCmd.MarkFlagRequired("path"); err != nil {
-				t.Fatalf("Failed to mark path flag as required: %v", err)
-			}
-
-			// Add delete command to test root
-			testRoot.AddCommand(deleteCmd)
-
-			// Build args
-			args := buildArgs("delete", map[string]string{
-				"path":    tt.flags.path,
-				"region":  tt.flags.region,
-				"role":    tt.flags.role,
-				"replica": tt.flags.replica,
+			runDeleteTest(t, ts, tt, func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
+				return &ssm.DeleteParameterOutput{}, nil
 			})
-
-			testRoot.SetArgs(args)
-			err := testRoot.Execute()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RunDelete() error = %v, wantErr %v", err, tt.wantErr)
-			}
 		})
 	}
 }
