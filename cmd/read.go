@@ -245,7 +245,7 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 	if readFile != "" {
 		// Ensure directory exists
 		dir := filepath.Dir(readFile)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 
@@ -255,7 +255,7 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 		}
 
 		// Write to file
-		if err := os.WriteFile(readFile, []byte(output), 0644); err != nil {
+		if err := os.WriteFile(readFile, []byte(output), 0600); err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}
 		fmt.Printf("Parameter value written to %s\n", readFile)
