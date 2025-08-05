@@ -78,7 +78,7 @@ func (ts *testSetup) setupMockClient(mockClient *aws.MockSSMClient) {
 
 // setupConfigFile creates a test configuration file
 func (ts *testSetup) setupConfigFile(t *testing.T, content []byte) {
-	if err := os.WriteFile(filepath.Join(ts.tmpDir, ".params2env.yaml"), content, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(ts.tmpDir, ".params2env.yaml"), content, 0600); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 }
