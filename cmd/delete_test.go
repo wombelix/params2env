@@ -99,7 +99,6 @@ func TestRunDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			runDeleteTest(t, ts, tt, func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
 				switch tt.name {
 				case "parameter_not_found":
