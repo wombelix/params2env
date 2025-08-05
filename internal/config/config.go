@@ -180,7 +180,7 @@ func mergeConfig(global, local *Config) {
 	}
 
 	for _, field := range stringFields {
-		if *field.local != "" {
+		if field.local != nil && *field.local != "" {
 			*field.global = *field.local
 		}
 	}
