@@ -13,7 +13,6 @@ package logger
 import (
 	"log/slog"
 	"os"
-	"strings"
 )
 
 // InitLogger initializes and returns a new slog.Logger with the specified log level.
@@ -36,14 +35,14 @@ import (
 //	logger.Error("Error condition", "error", err)
 func InitLogger(level string) *slog.Logger {
 	var logLevel slog.Level
-	switch strings.ToLower(level) {
-	case "debug":
+	switch level {
+	case "debug", "DEBUG":
 		logLevel = slog.LevelDebug
-	case "info":
+	case "info", "INFO":
 		logLevel = slog.LevelInfo
-	case "warn":
+	case "warn", "WARN":
 		logLevel = slog.LevelWarn
-	case "error":
+	case "error", "ERROR":
 		logLevel = slog.LevelError
 	default:
 		logLevel = slog.LevelInfo
