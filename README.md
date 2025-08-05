@@ -8,6 +8,7 @@ SPDX-License-Identifier: CC0-1.0
 
 [![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/params2env)](https://api.reuse.software/info/git.sr.ht/~wombelix/params2env)
 [![builds.sr.ht status](https://builds.sr.ht/~wombelix/params2env.svg)](https://builds.sr.ht/~wombelix/params2env?)
+[![Release](https://github.com/wombelix/params2env/actions/workflows/release.yml/badge.svg)](https://github.com/wombelix/params2env/actions/workflows/release.yml)
 
 ## Table of Contents
 
