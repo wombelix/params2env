@@ -77,18 +77,8 @@ func ValidateKMSKey(key string) error {
 		return fmt.Errorf("KMS key identifier cannot be empty")
 	}
 
-	// Check if it's a key ID
-	if kmsKeyIDRegex.MatchString(key) {
-		return nil
-	}
-
-	// Check if it's a key alias
-	if kmsAliasRegex.MatchString(key) {
-		return nil
-	}
-
-	// Check if it's a key ARN
-	if kmsArnRegex.MatchString(key) {
+	// Check if it matches any valid KMS key format
+	if kmsKeyIDRegex.MatchString(key) || kmsAliasRegex.MatchString(key) || kmsArnRegex.MatchString(key) {
 		return nil
 	}
 
