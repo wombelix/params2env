@@ -35,23 +35,22 @@ parameters in the Parameter Store.
 
 ### Technical details
 
-It leverages the latest version of the AWS Go SDK to authenticate, assume roles
-and interact with parameters from the Parameter Store. A design goal is to prefer
-Go standard libraries, for example slog or testing, to avoid external
-dependencies, and to achieve a 100% unit test coverage.
+The tool uses the AWS Go SDK to authenticate, assume roles
+and interact with parameters from the Parameter Store. I tried to keep external
+dependencies minimal and stick to Go standard libraries like slog and testing
+where possible. The goal is 100% unit test coverage.
 
-The tool can run with a yaml configuration file, ~/.params2env.yaml or
-.params2env.yaml, or with command line arguments. Command line arguments have a
-higher precedence than the configuration file in the current directory. The
-configuration file in the current directory has a higher precedence than the
-global configuration file in the home directory.
+You can run it with a YAML configuration file (~/.params2env.yaml or
+.params2env.yaml) or with command line arguments. Command line arguments
+override config file settings. A config file in the current directory
+takes precedence over the global one in your home directory.
 
 ## Installation
 
 Pre-built binaries for Linux, macOS, and Windows are available on
 the [GitHub Releases](https://github.com/wombelix/params2env/releases) page.
 
-Download the appropriate binary for your platform and add it to your PATH.
+Download the binary for your platform and add it to your PATH.
 
 ## Usage
 
@@ -95,9 +94,8 @@ Result (Example values, no actual secrets):
 export MY_SECRET="<secret-value>"
 ```
 
-When `--output` is set to `env` or removed from the arguments, the output needs
-to be evaluated by the shell to set the environment variable. You can do this in
-two ways:
+To actually set the environment variables in your shell, you need to evaluate
+the output. You can do this in two ways:
 
 ```bash
 # Using eval
@@ -185,7 +183,7 @@ params2env delete --region "eu-central-1" --replica "eu-west-1" \
 
 ### YAML configuration file reference
 
-Settings under params have a higher precedence than the global settings.
+Settings under params override the global settings.
 Some settings are only used when reading parameters, others when writing parameters.
 
 ```yaml
@@ -253,8 +251,6 @@ The project includes a Makefile with the following targets:
 * `make tests`: Run all unit tests with verbose output and coverage report
 * `make clean`: Remove the binary and coverage files
 
-Example:
-
 ```bash
 # Build the binary
 make build
@@ -268,9 +264,8 @@ make clean
 
 ### Integration Tests
 
-The `tests/integration-tests.sh` script provides comprehensive integration testing.
-It tests all features against a real AWS environment, including parameter creation,
-modification, deletion, and role assumption.
+The `tests/integration-tests.sh` script tests all features against a real AWS environment,
+including parameter creation, modification, deletion, and role assumption.
 
 Prerequisites:
 
@@ -280,8 +275,6 @@ Prerequisites:
    * `PRIMARY_REGION`: Your primary AWS region (e.g., eu-central-1)
    * `SECONDARY_REGION`: Your secondary AWS region (e.g., eu-west-1)
    * `AWS_IAM_PRINCIPAL`: Your IAM principal ARN (user or role)
-
-Example:
 
 ```bash
 # Set required environment variables
@@ -294,13 +287,9 @@ export AWS_IAM_PRINCIPAL="arn:aws:iam::123456789012:role/YourRole"
 ./tests/integration-tests.sh
 ```
 
-The script will:
-
-1) Create necessary IAM roles and policies
-2) Test String and SecureString parameters
-3) Test with and without role assumption
-4) Test configuration file functionality
-5) Clean up all created resources
+The script will create necessary IAM roles and policies, test String and SecureString
+parameters with and without role assumption, test configuration file functionality,
+and clean up all created resources.
 
 Note: Some tests involve AWS KMS keys which incur costs ($1/month per key).
 The script will ask for confirmation before creating any billable resources.
@@ -310,30 +299,30 @@ The script will ask for confirmation before creating any billable resources.
 The primary location is:
 [git.sr.ht/~wombelix/params2env](https://git.sr.ht/~wombelix/params2env)
 
-Mirrors are available on:
-
-* [Codeberg](https://codeberg.org/wombelix/params2env)
-* [Gitlab](https://gitlab.com/wombelix/params2env)
-* [GitHub](https://github.com/wombelix/params2env)
+Mirrors are available on
+[Codeberg](https://codeberg.org/wombelix/params2env),
+[Gitlab](https://gitlab.com/wombelix/params2env)
+and
+[GitHub](https://github.com/wombelix/params2env).
 
 ## Contribute
 
-Please don't hesitate to provide Feedback, open an Issue or create a Pull /
-Merge Request.
+Please don't hesitate to provide feedback, open an issue or create a pull /
+merge request.
 
 Just pick the workflow or platform you prefer and are most comfortable with.
 
 Feedback, bug reports or patches to my sr.ht list
 [~wombelix/inbox@lists.sr.ht](https://lists.sr.ht/~wombelix/inbox) or via
-[Email and Instant Messaging](https://dominik.wombacher.cc/pages/contact.html)
+[email and instant messaging](https://dominik.wombacher.cc/pages/contact.html)
 are also always welcome.
 
 ## License
 
 Unless otherwise stated: `MIT`
 
-All files contain license information either as `header comment` or
-`corresponding .license` file.
+All files contain license information either as
+`header comment` or `corresponding .license` file.
 
-[REUSE](https://reuse.software) from the [FSFE](https://fsfe.org/) implemented
-to verify license and copyright compliance.
+[REUSE](https://reuse.software) from the [FSFE](https://fsfe.org/)
+implemented to verify license and copyright compliance.
