@@ -101,16 +101,23 @@ func LoadConfig() (*Config, error) {
 	if err == nil {
 		// Clean and validate home directory path
 		home = filepath.Clean(home)
-		homeConfig := filepath.Join(home, ".params2env.yaml")
-		// Validate path is within home directory to prevent traversal
-		if rel, err := filepath.Rel(home, homeConfig); err != nil || strings.Contains(rel, "..") {
-			fmt.Fprintf(os.Stderr, "Warning: Invalid home config path detected\n")
-		} else if fileExists(homeConfig) {
-			if err := loadFile(homeConfig, &cfg); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", sanitizeForLog(filepath.Base(homeConfig)))
-			} else if err := cfg.Validate(); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", sanitizeForLog(filepath.Base(homeConfig)))
-				cfg = Config{} // Reset to empty config if validation fails
+		// Validate home directory doesn't contain traversal sequences
+		if strings.Contains(home, "..") {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid home directory path detected\n")
+		} else {
+			homeConfig := filepath.Join(home, ".params2env.yaml")
+			// Additional validation that the joined path is still within home
+			cleanPath := filepath.Clean(homeConfig)
+			if rel, err := filepath.Rel(home, cleanPath); err != nil || strings.Contains(rel, "..") || filepath.IsAbs(rel) {
+				fmt.Fprintf(os.Stderr, "Warning: Invalid home config path detected\n")
+			} else if fileExists(cleanPath) {
+				homeConfig = cleanPath
+				if err := loadFile(homeConfig, &cfg); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s\n", sanitizeForLog(homeConfig))
+				} else if err := cfg.Validate(); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Invalid global config in %s\n", sanitizeForLog(homeConfig))
+					cfg = Config{} // Reset to empty config if validation fails
+				}
 			}
 		}
 	}
@@ -120,9 +127,9 @@ func LoadConfig() (*Config, error) {
 	if fileExists(cwdConfig) {
 		localCfg := Config{}
 		if err := loadFile(cwdConfig, &localCfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", sanitizeForLog(filepath.Base(cwdConfig)))
+			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", sanitizeForLog(cwdConfig))
 		} else if err := localCfg.Validate(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", sanitizeForLog(filepath.Base(cwdConfig)))
+			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", sanitizeForLog(cwdConfig))
 		} else {
 			mergeConfig(&cfg, &localCfg)
 		}
