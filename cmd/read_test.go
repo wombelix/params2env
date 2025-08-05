@@ -19,25 +19,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestRunRead(t *testing.T) {
-	// Create temporary directory for test files
+type readTestSetup struct {
+	tmpDir        string
+	origHome      string
+	origRegion    string
+	origNewClient aws.NewClientFunc
+}
+
+func setupReadTest(t *testing.T) *readTestSetup {
 	tmpDir, err := os.MkdirTemp("", "params2env-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
-	// Save and restore environment
 	origHome := os.Getenv("HOME")
 	origRegion := os.Getenv("AWS_REGION")
-	defer func() {
-		os.Setenv("HOME", origHome)
-		os.Setenv("AWS_REGION", origRegion)
-	}()
 	os.Setenv("HOME", tmpDir)
 	os.Setenv("AWS_REGION", "eu-central-1")
 
-	// Create mock AWS client
+	origNewClient := aws.NewClient
 	mockClient := &aws.MockSSMClient{
 		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
 			value := "test-value"
@@ -48,15 +48,43 @@ func TestRunRead(t *testing.T) {
 			}, nil
 		},
 	}
-
-	// Save original NewClient and restore after tests
-	origNewClient := aws.NewClient
-	defer func() { aws.NewClient = origNewClient }()
-
-	// Override NewClient for testing
 	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 		return &aws.Client{SSMClient: mockClient}, nil
 	}
+
+	return &readTestSetup{
+		tmpDir:        tmpDir,
+		origHome:      origHome,
+		origRegion:    origRegion,
+		origNewClient: origNewClient,
+	}
+}
+
+func (rts *readTestSetup) cleanup() {
+	_ = os.RemoveAll(rts.tmpDir)
+	_ = os.Setenv("HOME", rts.origHome)
+	_ = os.Setenv("AWS_REGION", rts.origRegion)
+	aws.NewClient = rts.origNewClient
+}
+
+func setupReadFlags(t *testing.T, testRoot *cobra.Command) {
+	readCmd.ResetFlags()
+	readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required)")
+	readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
+	readCmd.Flags().StringVar(&readRole, "role", "", "AWS role ARN to assume (optional)")
+	readCmd.Flags().StringVar(&readFile, "file", "", "File to write to (optional)")
+	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
+	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
+	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	if err := readCmd.MarkFlagRequired("path"); err != nil {
+		t.Fatalf("Failed to mark path flag as required: %v", err)
+	}
+	testRoot.AddCommand(readCmd)
+}
+
+func TestRunRead(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
 
 	tests := []struct {
 		name       string
@@ -126,6 +154,16 @@ func TestRunRead(t *testing.T) {
 			args:    []string{"--path", "/test/param", "--file", "/invalid/path/test.env"},
 			wantErr: true,
 			setupFunc: func() {
+				mockClient := &aws.MockSSMClient{
+					GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+						value := "test-value"
+						return &ssm.GetParameterOutput{
+							Parameter: &types.Parameter{
+								Value: &value,
+							},
+						}, nil
+					},
+				}
 				aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 					return &aws.Client{SSMClient: mockClient}, nil
 				}
@@ -138,43 +176,24 @@ func TestRunRead(t *testing.T) {
 			if tt.setupFunc != nil {
 				tt.setupFunc()
 				defer func() {
-					aws.NewClient = origNewClient
+					aws.NewClient = rts.origNewClient
 				}()
 			}
-			// Create a test root command
 			testRoot := &cobra.Command{Use: "params2env"}
-
-			// Reset flags before each test
-			readCmd.ResetFlags()
-			readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required)")
-			readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
-			readCmd.Flags().StringVar(&readRole, "role", "", "AWS role ARN to assume (optional)")
-			readCmd.Flags().StringVar(&readFile, "file", "", "File to write to (optional)")
-			readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
-			readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
-			readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
-			if err := readCmd.MarkFlagRequired("path"); err != nil {
-				t.Fatalf("Failed to mark path flag as required: %v", err)
-			}
-
-			// Add read command to test root
-			testRoot.AddCommand(readCmd)
+			setupReadFlags(t, testRoot)
 
 			// Capture stdout
 			oldStdout := os.Stdout
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
-			// Execute command with "read" prefix
 			args := append([]string{"read"}, tt.args...)
 			testRoot.SetArgs(args)
 			err := testRoot.Execute()
 
-			// Restore stdout
 			w.Close()
 			os.Stdout = oldStdout
 
-			// Read captured output
 			var buf bytes.Buffer
 			if _, err := io.Copy(&buf, r); err != nil {
 				t.Fatalf("Failed to read captured output: %v", err)
@@ -189,7 +208,6 @@ func TestRunRead(t *testing.T) {
 					t.Errorf("runRead() output = %q, want %q", got, tt.wantOutput)
 				}
 
-				// If file output was requested, verify file contents
 				if readFile != "" {
 					content, err := os.ReadFile(readFile)
 					if err != nil {
@@ -204,24 +222,25 @@ func TestRunRead(t *testing.T) {
 }
 
 func TestRunReadWithConfig(t *testing.T) {
-	// Create temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "params2env-test-config")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	// Override mock client for config test
+	mockClient := &aws.MockSSMClient{
+		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+			value := "test-value-" + *input.Name
+			return &ssm.GetParameterOutput{
+				Parameter: &types.Parameter{
+					Value: &value,
+				},
+			}, nil
+		},
 	}
-	defer os.RemoveAll(tmpDir)
+	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+		return &aws.Client{SSMClient: mockClient}, nil
+	}
 
-	// Save and restore environment
-	origHome := os.Getenv("HOME")
-	origRegion := os.Getenv("AWS_REGION")
-	defer func() {
-		os.Setenv("HOME", origHome)
-		os.Setenv("AWS_REGION", origRegion)
-	}()
-	os.Setenv("HOME", tmpDir)
-	os.Setenv("AWS_REGION", "eu-central-1")
-
-	// Create config file with multiple parameters
+	// Create config file
 	configContent := []byte(`
 region: eu-central-1
 role: arn:aws:iam::123:role/test
@@ -236,29 +255,8 @@ params:
   - name: /app/db/password
     env: DB_PASSWORD
 `)
-	if err := os.WriteFile(filepath.Join(tmpDir, ".params2env.yaml"), configContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(rts.tmpDir, ".params2env.yaml"), configContent, 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
-	}
-
-	// Create mock AWS client
-	mockClient := &aws.MockSSMClient{
-		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
-			value := "test-value-" + *input.Name
-			return &ssm.GetParameterOutput{
-				Parameter: &types.Parameter{
-					Value: &value,
-				},
-			}, nil
-		},
-	}
-
-	// Save original NewClient and restore after tests
-	origNewClient := aws.NewClient
-	defer func() { aws.NewClient = origNewClient }()
-
-	// Override NewClient for testing
-	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
-		return &aws.Client{SSMClient: mockClient}, nil
 	}
 
 	tests := []struct {
@@ -289,10 +287,7 @@ params:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a test root command
 			testRoot := &cobra.Command{Use: "params2env"}
-
-			// Reset flags before each test
 			readCmd.ResetFlags()
 			readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
 			readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
@@ -301,25 +296,19 @@ params:
 			readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 			readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 			readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
-
-			// Add read command to test root
 			testRoot.AddCommand(readCmd)
 
-			// Capture stdout
 			oldStdout := os.Stdout
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 
-			// Execute command with "read" prefix
 			args := append([]string{"read"}, tt.args...)
 			testRoot.SetArgs(args)
 			err := testRoot.Execute()
 
-			// Restore stdout
 			w.Close()
 			os.Stdout = oldStdout
 
-			// Read captured output
 			var buf bytes.Buffer
 			if _, err := io.Copy(&buf, r); err != nil {
 				t.Fatalf("Failed to read captured output: %v", err)
@@ -335,7 +324,6 @@ params:
 				}
 			}
 
-			// If file output was requested, verify file contents
 			if readFile != "" {
 				content, err := os.ReadFile(readFile)
 				if err != nil {
