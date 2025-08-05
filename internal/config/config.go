@@ -98,7 +98,14 @@ func LoadConfig() (*Config, error) {
 	// Try loading from home directory first
 	home, err := os.UserHomeDir()
 	if err == nil {
+		// Clean and validate home directory path
+		home = filepath.Clean(home)
 		homeConfig := filepath.Join(home, ".params2env.yaml")
+		// Ensure the config file is within the home directory
+		expectedPath := filepath.Join(home, ".params2env.yaml")
+		if homeConfig != expectedPath {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid home config path detected\n")
+		} else
 		if fileExists(homeConfig) {
 			if err := loadFile(homeConfig, &cfg); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to load global config from %s: %v\n", filepath.Base(homeConfig), err)
