@@ -159,33 +159,32 @@ func loadFile(filename string, cfg *Config) error {
 // (like Params), the local values completely replace global values
 // rather than being merged.
 func mergeConfig(global, local *Config) {
-	if local.Region != "" {
-		global.Region = local.Region
+	// Merge string fields
+	stringFields := []struct {
+		global, local *string
+	}{
+		{&global.Region, &local.Region},
+		{&global.Replica, &local.Replica},
+		{&global.Prefix, &local.Prefix},
+		{&global.Output, &local.Output},
+		{&global.File, &local.File},
+		{&global.EnvPrefix, &local.EnvPrefix},
+		{&global.Role, &local.Role},
+		{&global.KMS, &local.KMS},
 	}
-	if local.Replica != "" {
-		global.Replica = local.Replica
+
+	for _, field := range stringFields {
+		if *field.local != "" {
+			*field.global = *field.local
+		}
 	}
-	if local.Prefix != "" {
-		global.Prefix = local.Prefix
-	}
-	if local.Output != "" {
-		global.Output = local.Output
-	}
-	if local.File != "" {
-		global.File = local.File
-	}
+
+	// Merge pointer fields
 	if local.Upper != nil {
 		global.Upper = local.Upper
 	}
-	if local.EnvPrefix != "" {
-		global.EnvPrefix = local.EnvPrefix
-	}
-	if local.Role != "" {
-		global.Role = local.Role
-	}
-	if local.KMS != "" {
-		global.KMS = local.KMS
-	}
+
+	// Merge slice fields
 	if len(local.Params) > 0 {
 		global.Params = local.Params
 	}
