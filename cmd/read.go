@@ -178,11 +178,8 @@ func mergeReadConfig(cfg *config.Config) {
 
 // ensureReadRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureReadRegionIsSet() error {
-	if readRegion == "" {
-		readRegion = os.Getenv("AWS_REGION")
-		if readRegion == "" {
-			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
-		}
+	if readRegion = os.Getenv("AWS_REGION"); readRegion == "" {
+		return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 	}
 	return nil
 }
@@ -246,6 +243,7 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 	if readFile != "" {
 		// Ensure directory exists
 		dir := filepath.Dir(readFile)
+		// Ensure directory exists with secure permissions (0700 = owner full access only)
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}

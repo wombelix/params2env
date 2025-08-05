@@ -130,8 +130,7 @@ func mergeDeleteConfig(cfg *config.Config) {
 // ensureDeleteRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureDeleteRegionIsSet() error {
 	if deleteRegion == "" {
-		deleteRegion = os.Getenv("AWS_REGION")
-		if deleteRegion == "" {
+		if deleteRegion = os.Getenv("AWS_REGION"); deleteRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
 	}
@@ -169,7 +168,8 @@ func deleteInReplicaRegion() error {
 	fmt.Printf("Deleting parameter '%s' in replica region '%s'...\n", deletePath, deleteReplica)
 	if err := replicaClient.DeleteParameter(ctx, deletePath); err != nil {
 		if errors.Is(err, aws.ErrNotFound) {
-			return fmt.Errorf("parameter '%s' not found in replica region '%s'", deletePath, deleteReplica)
+			fmt.Printf("Warning: parameter '%s' not found in replica region '%s' (already deleted or never existed)\n", deletePath, deleteReplica)
+			return nil
 		}
 		return fmt.Errorf("failed to delete parameter in replica region '%s': %w", deleteReplica, err)
 	}

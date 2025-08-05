@@ -170,8 +170,7 @@ func validateParameterType() error {
 // ensureRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureRegionIsSet() error {
 	if createRegion == "" {
-		createRegion = os.Getenv("AWS_REGION")
-		if createRegion == "" {
+		if createRegion = os.Getenv("AWS_REGION"); createRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
 	}
@@ -222,18 +221,23 @@ func createInReplicaRegion() error {
 
 // getReplicaKMSKeyID returns the KMS key ID for the replica region
 func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) *string {
+	const arnPrefix = "arn:aws:kms:"
+	const minARNParts = 6
+
 	// If not an ARN, use the key ID as is
-	if !strings.HasPrefix(kmsKeyID, "arn:aws:kms:") {
+	if !strings.HasPrefix(kmsKeyID, arnPrefix) {
 		return &kmsKeyID
 	}
 
 	// Extract account ID and key ID from the ARN
 	arnParts := strings.Split(kmsKeyID, ":")
-	if len(arnParts) < 6 {
+	if len(arnParts) < minARNParts {
 		return &kmsKeyID
 	}
 
-	replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:%s", replicaRegion, arnParts[4], arnParts[5])
+	accountID := arnParts[4]
+	keyID := arnParts[5]
+	replicaARN := fmt.Sprintf("%s%s:%s:%s", arnPrefix, replicaRegion, accountID, keyID)
 	return &replicaARN
 }
 

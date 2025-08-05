@@ -16,65 +16,36 @@ func TestInitLogger(t *testing.T) {
 		level     string
 		wantLevel slog.Level
 	}{
-		{
-			name:      "debug level",
-			level:     "debug",
-			wantLevel: slog.LevelDebug,
-		},
-		{
-			name:      "info level",
-			level:     "info",
-			wantLevel: slog.LevelInfo,
-		},
-		{
-			name:      "warn level",
-			level:     "warn",
-			wantLevel: slog.LevelWarn,
-		},
-		{
-			name:      "error level",
-			level:     "error",
-			wantLevel: slog.LevelError,
-		},
-		{
-			name:      "invalid level defaults to info",
-			level:     "invalid",
-			wantLevel: slog.LevelInfo,
-		},
-		{
-			name:      "empty level defaults to info",
-			level:     "",
-			wantLevel: slog.LevelInfo,
-		},
-		{
-			name:      "case insensitive level",
-			level:     "DEBUG",
-			wantLevel: slog.LevelDebug,
-		},
+		{"debug level", "debug", slog.LevelDebug},
+		{"info level", "info", slog.LevelInfo},
+		{"warn level", "warn", slog.LevelWarn},
+		{"error level", "error", slog.LevelError},
+		{"invalid level defaults to info", "invalid", slog.LevelInfo},
+		{"empty level defaults to info", "", slog.LevelInfo},
+		{"case insensitive level", "DEBUG", slog.LevelDebug},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := InitLogger(tt.level)
-			if logger == nil {
-				t.Error("InitLogger() returned nil")
-				return
-			}
-
-			// Get the handler from the logger
-			handler, ok := logger.Handler().(*slog.TextHandler)
-			if !ok {
-				t.Error("Logger handler is not TextHandler")
-				return
-			}
-
-			// Check if the level is set correctly
-			// Note: slog doesn't provide a direct way to get the level from the handler
-			// We can only verify that the logger is created successfully
-			// and that it responds to the appropriate level
-			if !handler.Enabled(context.Background(), tt.wantLevel) {
-				t.Errorf("Logger level %v not enabled for wanted level %v", tt.level, tt.wantLevel)
-			}
+			testLoggerLevel(t, tt.level, tt.wantLevel)
 		})
+	}
+}
+
+func testLoggerLevel(t *testing.T, level string, wantLevel slog.Level) {
+	logger := InitLogger(level)
+	if logger == nil {
+		t.Error("InitLogger() returned nil")
+		return
+	}
+
+	handler, ok := logger.Handler().(*slog.TextHandler)
+	if !ok {
+		t.Error("Logger handler is not TextHandler")
+		return
+	}
+
+	if !handler.Enabled(context.Background(), wantLevel) {
+		t.Errorf("Logger level %v not enabled for wanted level %v", level, wantLevel)
 	}
 }

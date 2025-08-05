@@ -52,7 +52,7 @@ func (te *testEnv) cleanup(t *testing.T) {
 
 func TestLoadConfig(t *testing.T) {
 	te := setupTestEnv(t, "params2env-test")
-	defer te.cleanup(t)
+	t.Cleanup(func() { te.cleanup(t) })
 
 	// Create test files
 	homeConfig := filepath.Join(te.tmpDir, ".params2env.yaml")

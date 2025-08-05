@@ -105,7 +105,8 @@ func LoadConfig() (*Config, error) {
 		if strings.Contains(home, "..") {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid home directory path detected\n")
 		} else {
-			homeConfig := filepath.Join(home, ".params2env.yaml")
+			const configFileName = ".params2env.yaml"
+			homeConfig := filepath.Join(home, configFileName)
 			// Additional validation that the joined path is still within home
 			cleanPath := filepath.Clean(homeConfig)
 			if rel, err := filepath.Rel(home, cleanPath); err != nil || strings.Contains(rel, "..") || filepath.IsAbs(rel) {
@@ -128,10 +129,12 @@ func LoadConfig() (*Config, error) {
 		localCfg := Config{}
 		if err := loadFile(cwdConfig, &localCfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to load local config from %s\n", sanitizeForLog(cwdConfig))
-		} else if err := localCfg.Validate(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", sanitizeForLog(cwdConfig))
 		} else {
-			mergeConfig(&cfg, &localCfg)
+			if err := localCfg.Validate(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Invalid local config in %s\n", sanitizeForLog(cwdConfig))
+			} else {
+				mergeConfig(&cfg, &localCfg)
+			}
 		}
 	}
 
@@ -152,10 +155,10 @@ func fileExists(filename string) bool {
 func loadFile(filename string, cfg *Config) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return fmt.Errorf("failed to read config file %s: %w", sanitizeForLog(filename), err)
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return fmt.Errorf("failed to parse YAML: %w", err)
+		return fmt.Errorf("failed to parse YAML in %s: %w", sanitizeForLog(filename), err)
 	}
 	return nil
 }
@@ -166,23 +169,29 @@ func loadFile(filename string, cfg *Config) error {
 // rather than being merged.
 func mergeConfig(global, local *Config) {
 	// Merge string fields
-	stringFields := []struct {
-		global, local *string
-	}{
-		{&global.Region, &local.Region},
-		{&global.Replica, &local.Replica},
-		{&global.Prefix, &local.Prefix},
-		{&global.Output, &local.Output},
-		{&global.File, &local.File},
-		{&global.EnvPrefix, &local.EnvPrefix},
-		{&global.Role, &local.Role},
-		{&global.KMS, &local.KMS},
+	if local.Region != "" {
+		global.Region = local.Region
 	}
-
-	for _, field := range stringFields {
-		if field.local != nil && *field.local != "" {
-			*field.global = *field.local
-		}
+	if local.Replica != "" {
+		global.Replica = local.Replica
+	}
+	if local.Prefix != "" {
+		global.Prefix = local.Prefix
+	}
+	if local.Output != "" {
+		global.Output = local.Output
+	}
+	if local.File != "" {
+		global.File = local.File
+	}
+	if local.EnvPrefix != "" {
+		global.EnvPrefix = local.EnvPrefix
+	}
+	if local.Role != "" {
+		global.Role = local.Role
+	}
+	if local.KMS != "" {
+		global.KMS = local.KMS
 	}
 
 	// Merge pointer fields
@@ -196,7 +205,10 @@ func mergeConfig(global, local *Config) {
 	}
 }
 
-// sanitizeForLog removes control characters that could be used for log injection
+// sanitizeForLog removes control characters that could be used for log injection (CWE-117 mitigation)
 func sanitizeForLog(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", ""), "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\t", "")
+	return strings.ReplaceAll(s, "\x1b", "") // Remove escape sequences
 }

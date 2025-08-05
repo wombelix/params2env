@@ -55,7 +55,7 @@ func runModifyTest(t *testing.T, ts *testSetup, flags modifyFlags, wantErr bool)
 
 func TestRunModify(t *testing.T) {
 	ts := setupTest(t)
-	defer ts.cleanup()
+	t.Cleanup(ts.cleanup)
 
 	tests := []struct {
 		name    string

@@ -137,11 +137,8 @@ func mergeModifyConfig(cfg *config.Config) {
 
 // ensureModifyRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureModifyRegionIsSet() error {
-	if modifyRegion == "" {
-		modifyRegion = os.Getenv("AWS_REGION")
-		if modifyRegion == "" {
-			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
-		}
+	if modifyRegion = os.Getenv("AWS_REGION"); modifyRegion == "" {
+		return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 	}
 	return nil
 }

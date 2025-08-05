@@ -87,12 +87,12 @@ params2env read --region "eu-central-1" --path "/my/secret" \
   --env-prefix "my_" --env "secret"
 ```
 
-Result:
+Result (Example values, no actual secrets):
 
 ~/.my-secret
 
 ```bash
-export MY_SECRET="value_of_secure_string"
+export MY_SECRET="<secret-value>"
 ```
 
 When `--output` is set to `env` or removed from the arguments, the output needs
@@ -107,10 +107,11 @@ eval $(params2env read --path "/my/secret")
 source <(params2env read --path "/my/secret")
 ```
 
-This will set the environment variable in your current shell:
+This will set the environment variable in your current
+shell (Example values, no actual secrets):
 
 ```bash
-MY_SECRET="value_of_secure_string"
+MY_SECRET="<secret-value>"
 ```
 
 ### Subcommand: create
@@ -230,10 +231,10 @@ Using this configuration:
 # Read all parameters from config
 params2env read
 
-# Result:
+# Result (Example values, no actual secrets):
 export APP_DB_URL="postgresql://db.example.com:5432"
 export APP_DB_USER="dbuser"
-export APP_DB_PASSWORD="dbpass"
+export APP_DB_PASSWORD="<password-value>"
 
 # Write all parameters to file
 params2env read --file ~/.env
