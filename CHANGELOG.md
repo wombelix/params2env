@@ -1,3 +1,9 @@
+## v0.1.2 (2025-08-05)
+
+### Fix
+
+- **gha**: bump goreleaser action to support v2 config
+
 ## v0.1.1 (2025-08-05)
 
 ### Fix
