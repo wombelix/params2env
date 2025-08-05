@@ -15,3 +15,12 @@ tests:
 clean:
 	rm -f params2env
 	rm -f coverage.out
+
+release:
+	cz bump
+
+	# Push main branch with skip-ci to avoid triggering workflows
+	git push origin main -o skip-ci
+
+	# Push tag (triggers sr.ht build git mirroring)
+	git push origin --tags
