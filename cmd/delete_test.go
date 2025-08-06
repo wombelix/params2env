@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -188,6 +189,94 @@ replica: eu-west-1
 			runDeleteTest(t, ts, tt, func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
 				return &ssm.DeleteParameterOutput{}, nil
 			})
+		})
+	}
+}
+
+// TestDeleteReplicaNotFound tests that replica deletion behavior is consistent with primary region.
+// This test expects replica deletion to fail when parameter is not found, matching primary region behavior.
+func TestDeleteReplicaNotFound(t *testing.T) {
+	ts := setupDeleteTest(t)
+	defer ts.cleanup()
+
+	tests := []struct {
+		name           string
+		flags          deleteFlags
+		primaryError   error
+		replicaError   error
+		wantErr        bool
+		errorContains  string
+	}{
+		{
+			name: "replica_not_found_should_fail",
+			flags: deleteFlags{
+				path:    "/test/param",
+				region:  "us-west-2",
+				replica: "eu-west-1",
+			},
+			primaryError:  nil, // Primary deletion succeeds
+			replicaError:  &types.ParameterNotFound{}, // Replica not found
+			wantErr:       true,
+			errorContains: "not found in replica region",
+		},
+		{
+			name: "both_regions_succeed",
+			flags: deleteFlags{
+				path:    "/test/param",
+				region:  "us-west-2",
+				replica: "eu-west-1",
+			},
+			primaryError: nil,
+			replicaError: nil,
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts.output.Reset()
+
+			// Track which region is being called to return appropriate error
+			callCount := 0
+			mockClient := &aws.MockSSMClient{
+				DeleteParamFunc: func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
+					callCount++
+					if callCount == 1 {
+						// First call is primary region
+						if tt.primaryError != nil {
+							return nil, tt.primaryError
+						}
+						return &ssm.DeleteParameterOutput{}, nil
+					} else {
+						// Second call is replica region
+						if tt.replicaError != nil {
+							return nil, tt.replicaError
+						}
+						return &ssm.DeleteParameterOutput{}, nil
+					}
+				},
+			}
+			ts.setupMockClient(mockClient)
+
+			args := buildArgs("delete", map[string]string{
+				"path":    tt.flags.path,
+				"region":  tt.flags.region,
+				"replica": tt.flags.replica,
+			})
+
+			testRoot.SetArgs(args)
+			err := testRoot.Execute()
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TestDeleteReplicaNotFound() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr && tt.errorContains != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("TestDeleteReplicaNotFound() error = %v, should contain %q", err, tt.errorContains)
+				}
+			}
 		})
 	}
 }

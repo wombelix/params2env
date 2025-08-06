@@ -168,8 +168,7 @@ func deleteInReplicaRegion() error {
 	fmt.Printf("Deleting parameter '%s' in replica region '%s'...\n", deletePath, deleteReplica)
 	if err := replicaClient.DeleteParameter(ctx, deletePath); err != nil {
 		if errors.Is(err, aws.ErrNotFound) {
-			fmt.Printf("Warning: parameter '%s' not found in replica region '%s' (already deleted or never existed)\n", deletePath, deleteReplica)
-			return nil
+			return fmt.Errorf("parameter '%s' not found in replica region '%s'", deletePath, deleteReplica)
 		}
 		return fmt.Errorf("failed to delete parameter in replica region '%s': %w", deleteReplica, err)
 	}
