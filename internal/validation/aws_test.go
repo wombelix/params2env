@@ -97,8 +97,7 @@ func TestValidateRegion(t *testing.T) {
 		{
 			name:    "empty region",
 			region:  "",
-			wantErr: true,
-			errMsg:  "region cannot be empty",
+			wantErr: false,
 		},
 		{
 			name:    "invalid format",
@@ -158,8 +157,7 @@ func TestValidateKMSKey(t *testing.T) {
 		{
 			name:    "empty key",
 			key:     "",
-			wantErr: true,
-			errMsg:  "KMS key identifier cannot be empty",
+			wantErr: false,
 		},
 		{
 			name:    "invalid key ID format",
@@ -220,8 +218,7 @@ func TestValidateRoleARN(t *testing.T) {
 		{
 			name:    "empty ARN",
 			arn:     "",
-			wantErr: true,
-			errMsg:  "role ARN cannot be empty",
+			wantErr: false,
 		},
 		{
 			name:    "invalid account ID",

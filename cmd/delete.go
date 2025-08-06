@@ -59,22 +59,16 @@ func validateDeleteFlags(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if deleteRegion != "" {
-		if err := validation.ValidateRegion(deleteRegion); err != nil {
-			return err
-		}
+	if err := validation.ValidateRegion(deleteRegion); err != nil {
+		return err
 	}
 
-	if deleteReplica != "" {
-		if err := validation.ValidateRegion(deleteReplica); err != nil {
-			return fmt.Errorf("invalid replica region: %w", err)
-		}
+	if err := validation.ValidateRegion(deleteReplica); err != nil {
+		return fmt.Errorf("invalid replica region: %w", err)
 	}
 
-	if deleteRole != "" {
-		if err := validation.ValidateRoleARN(deleteRole); err != nil {
-			return err
-		}
+	if err := validation.ValidateRoleARN(deleteRole); err != nil {
+		return err
 	}
 
 	return nil

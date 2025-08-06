@@ -67,22 +67,16 @@ func validateModifyFlags(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("required flag \"value\" not set")
 	}
 
-	if modifyRegion != "" {
-		if err := validation.ValidateRegion(modifyRegion); err != nil {
-			return err
-		}
+	if err := validation.ValidateRegion(modifyRegion); err != nil {
+		return err
 	}
 
-	if modifyReplica != "" {
-		if err := validation.ValidateRegion(modifyReplica); err != nil {
-			return fmt.Errorf("invalid replica region: %w", err)
-		}
+	if err := validation.ValidateRegion(modifyReplica); err != nil {
+		return fmt.Errorf("invalid replica region: %w", err)
 	}
 
-	if modifyRole != "" {
-		if err := validation.ValidateRoleARN(modifyRole); err != nil {
-			return err
-		}
+	if err := validation.ValidateRoleARN(modifyRole); err != nil {
+		return err
 	}
 
 	return nil

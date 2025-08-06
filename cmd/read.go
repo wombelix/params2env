@@ -80,16 +80,12 @@ func validateReadFlags(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if readRegion != "" {
-		if err := validation.ValidateRegion(readRegion); err != nil {
-			return err
-		}
+	if err := validation.ValidateRegion(readRegion); err != nil {
+		return err
 	}
 
-	if readRole != "" {
-		if err := validation.ValidateRoleARN(readRole); err != nil {
-			return err
-		}
+	if err := validation.ValidateRoleARN(readRole); err != nil {
+		return err
 	}
 
 	return nil

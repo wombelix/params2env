@@ -74,28 +74,20 @@ func validateCreateFlags(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("required flag \"value\" not set")
 	}
 
-	if createRegion != "" {
-		if err := validation.ValidateRegion(createRegion); err != nil {
-			return err
-		}
+	if err := validation.ValidateRegion(createRegion); err != nil {
+		return err
 	}
 
-	if createReplica != "" {
-		if err := validation.ValidateRegion(createReplica); err != nil {
-			return fmt.Errorf("invalid replica region: %w", err)
-		}
+	if err := validation.ValidateRegion(createReplica); err != nil {
+		return fmt.Errorf("invalid replica region: %w", err)
 	}
 
-	if createRole != "" {
-		if err := validation.ValidateRoleARN(createRole); err != nil {
-			return err
-		}
+	if err := validation.ValidateRoleARN(createRole); err != nil {
+		return err
 	}
 
-	if createKMS != "" {
-		if err := validation.ValidateKMSKey(createKMS); err != nil {
-			return err
-		}
+	if err := validation.ValidateKMSKey(createKMS); err != nil {
+		return err
 	}
 
 	return nil

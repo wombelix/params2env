@@ -57,9 +57,10 @@ func ValidateParameterPath(path string) error {
 // A valid region name:
 // - Must be in the format: [a-z]{2}-[a-z]+-\d
 // - Examples: us-east-1, eu-central-1, ap-southeast-2
+// - Empty string is considered valid (for optional fields)
 func ValidateRegion(region string) error {
 	if region == "" {
-		return fmt.Errorf("region cannot be empty")
+		return nil
 	}
 	if !regionRegex.MatchString(region) {
 		return fmt.Errorf("invalid region format: %s", region)
@@ -72,9 +73,10 @@ func ValidateRegion(region string) error {
 // - Key ID (UUID format)
 // - Key alias (alias/name format)
 // - Key ARN (full ARN format)
+// - Empty string is considered valid (for optional fields)
 func ValidateKMSKey(key string) error {
 	if key == "" {
-		return fmt.Errorf("KMS key identifier cannot be empty")
+		return nil
 	}
 
 	// Check if it matches any valid KMS key format
@@ -90,9 +92,10 @@ func ValidateKMSKey(key string) error {
 // - Must be in the format: arn:aws:iam::<account-id>:role/<role-name-with-path>
 // - Account ID must be 12 digits
 // - Role name must follow IAM naming rules
+// - Empty string is considered valid (for optional fields)
 func ValidateRoleARN(arn string) error {
 	if arn == "" {
-		return fmt.Errorf("role ARN cannot be empty")
+		return nil
 	}
 	if !roleArnRegex.MatchString(arn) {
 		return fmt.Errorf("invalid role ARN format: %s", arn)
