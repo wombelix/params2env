@@ -210,6 +210,13 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 		if errors.Is(err, aws.ErrNotFound) {
 			return "", fmt.Errorf("parameter '%s' not found in region '%s'", paramName, region)
 		}
+		if errors.Is(err, aws.ErrNoAccess) {
+			return "", fmt.Errorf("access denied to parameter '%s' in region '%s': check IAM permissions", paramName, region)
+		}
+		// Check for throttling errors by examining error message
+		if strings.Contains(err.Error(), "throttl") {
+			return "", fmt.Errorf("request throttled for parameter '%s' in region '%s': try again later", paramName, region)
+		}
 		return "", fmt.Errorf("failed to get parameter '%s' from region '%s': %w", paramName, region, err)
 	}
 

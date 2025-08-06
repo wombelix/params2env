@@ -151,6 +151,34 @@ func TestRunRead(t *testing.T) {
 			},
 		},
 		{
+			name:    "access_denied_error",
+			args:    []string{"--path", "/test/param"},
+			wantErr: true,
+			setupFunc: func() {
+				aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+					return &aws.Client{SSMClient: &aws.MockSSMClient{
+						GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+							return nil, aws.ErrNoAccess
+						},
+					}}, nil
+				}
+			},
+		},
+		{
+			name:    "throttling_error",
+			args:    []string{"--path", "/test/param"},
+			wantErr: true,
+			setupFunc: func() {
+				aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+					return &aws.Client{SSMClient: &aws.MockSSMClient{
+						GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+							return nil, fmt.Errorf("throttling error")
+						},
+					}}, nil
+				}
+			},
+		},
+		{
 			name:    "file_write_error",
 			args:    []string{"--path", "/test/param", "--file", "/invalid/path/test.env"},
 			wantErr: true,
