@@ -915,6 +915,31 @@ run_cmd_expect_fail "$PARAMS2ENV delete --path '/params2env-test/nonexistent-par
 run_cmd_expect_fail "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/nonexistent-role'" \
     "Read with invalid IAM role (should fail)"
 
+# Test parameter value size limits (AWS SSM limit is 4KB for String, 8KB for SecureString)
+echo -n "Testing parameter value size limit (should fail): "
+echo "Creating parameter with >4KB value"
+large_value=$(printf 'A%.0s' {1..5000})  # 5KB value, exceeds 4KB limit
+if $PARAMS2ENV create --path '/params2env-test/large-param' --value "$large_value" --type 'String' --region "${PRIMARY_REGION}" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Failed - should have failed but succeeded${NC}"
+    # Clean up if it somehow succeeded
+    $PARAMS2ENV delete --path '/params2env-test/large-param' --region "${PRIMARY_REGION}" >/dev/null 2>&1 || true
+else
+    echo -e "${GREEN}✓ Success - correctly failed as expected${NC}"
+fi
+
+# Test invalid parameter path formats
+run_cmd_expect_fail "$PARAMS2ENV create --path 'invalid-path-no-slash' --value 'test' --type 'String' --region '${PRIMARY_REGION}'" \
+    "Create parameter with invalid path format (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/param with spaces' --value 'test' --type 'String' --region '${PRIMARY_REGION}'" \
+    "Create parameter with spaces in path (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-kms-test' --value 'test' --type 'SecureString' --kms 'arn:aws:kms:${PRIMARY_REGION}:${AWS_ACCOUNT_ID}:key/invalid-key-id' --region '${PRIMARY_REGION}'" \
+    "Create SecureString with invalid KMS key (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-region-test' --value 'test' --type 'String' --region 'invalid-region-123'" \
+    "Create parameter with invalid region (should fail)"
+
 # Cleanup
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
