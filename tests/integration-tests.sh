@@ -111,21 +111,18 @@ cleanup_ssm_parameters() {
     local region=$1
     echo -e "${YELLOW}Cleaning up parameters in ${region}...${NC}"
 
-    # Get all parameters under /params2env-test/ path recursively
-    local params
-    params=$(aws ssm get-parameters-by-path \
+    # Get all parameters under /params2env-test/ path recursively as JSON
+    local params_json
+    params_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
         --recursive \
         --region "${region}" \
         --query 'Parameters[].Name' \
-        --output text 2>/dev/null)
+        --output json 2>/dev/null)
 
-    if [ -n "$params" ]; then
-        # Convert space-separated list to array using read
-        local param_array
-        IFS=' ' read -r -a param_array <<< "$params"
-
-        for param in "${param_array[@]}"; do
+    if [ -n "$params_json" ] && [ "$params_json" != "[]" ]; then
+        # Parse JSON array and process each parameter
+        while IFS= read -r param; do
             if [ -n "$param" ]; then
                 echo -n "  - Deleting: $param ... "
                 if aws ssm delete-parameter --name "$param" --region "${region}" 2>/dev/null; then
@@ -134,20 +131,20 @@ cleanup_ssm_parameters() {
                     echo -e "${RED}✗${NC}"
                 fi
             fi
-        done
+        done < <(echo "$params_json" | jq -r '.[]')
 
         # Verify all parameters are deleted
-        local remaining_params
-        remaining_params=$(aws ssm get-parameters-by-path \
+        local remaining_json
+        remaining_json=$(aws ssm get-parameters-by-path \
             --path "/params2env-test/" \
             --recursive \
             --region "${region}" \
             --query 'Parameters[].Name' \
-            --output text 2>/dev/null)
+            --output json 2>/dev/null)
 
-        if [ -n "$remaining_params" ]; then
+        if [ -n "$remaining_json" ] && [ "$remaining_json" != "[]" ]; then
             echo -e "${RED}Warning: Some parameters could not be deleted in ${region}:${NC}"
-            echo "$remaining_params"
+            echo "$remaining_json" | jq -r '.[]'
         else
             echo -e "${GREEN}All parameters successfully deleted in ${region}${NC}"
         fi
@@ -278,41 +275,39 @@ check_existing_resources() {
     local found_resources=()
 
     # Check for parameters in primary region
-    local primary_params
-    primary_params=$(aws ssm get-parameters-by-path \
+    local primary_json
+    primary_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
         --recursive \
         --region "${PRIMARY_REGION}" \
         --query 'Parameters[].Name' \
-        --output text 2>/dev/null)
+        --output json 2>/dev/null)
 
-    if [ -n "$primary_params" ]; then
+    if [ -n "$primary_json" ] && [ "$primary_json" != "[]" ]; then
         found_resources+=("SSM Parameters in ${PRIMARY_REGION} under /params2env-test/")
-        # Convert space-separated list to array using read
-        local param_array
-        IFS=' ' read -r -a param_array <<< "$primary_params"
-        for param in "${param_array[@]}"; do
-            found_resources+=("  - ${param}")
-        done
+        while IFS= read -r param; do
+            if [ -n "$param" ]; then
+                found_resources+=("  - ${param}")
+            fi
+        done < <(echo "$primary_json" | jq -r '.[]')
     fi
 
     # Check for parameters in secondary region
-    local secondary_params
-    secondary_params=$(aws ssm get-parameters-by-path \
+    local secondary_json
+    secondary_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
         --recursive \
         --region "${SECONDARY_REGION}" \
         --query 'Parameters[].Name' \
-        --output text 2>/dev/null)
+        --output json 2>/dev/null)
 
-    if [ -n "$secondary_params" ]; then
+    if [ -n "$secondary_json" ] && [ "$secondary_json" != "[]" ]; then
         found_resources+=("SSM Parameters in ${SECONDARY_REGION} under /params2env-test/")
-        # Convert space-separated list to array using read
-        local param_array
-        IFS=' ' read -r -a param_array <<< "$secondary_params"
-        for param in "${param_array[@]}"; do
-            found_resources+=("  - ${param}")
-        done
+        while IFS= read -r param; do
+            if [ -n "$param" ]; then
+                found_resources+=("  - ${param}")
+            fi
+        done < <(echo "$secondary_json" | jq -r '.[]')
     fi
 
     # If resources were found, ask to clean them up
@@ -328,11 +323,11 @@ check_existing_resources() {
 
             # Verify cleanup was successful
             local remaining_primary
-            remaining_primary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${PRIMARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
+            remaining_primary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${PRIMARY_REGION}" --query 'Parameters[].Name' --output json 2>/dev/null)
             local remaining_secondary
-            remaining_secondary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${SECONDARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
+            remaining_secondary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${SECONDARY_REGION}" --query 'Parameters[].Name' --output json 2>/dev/null)
 
-            if [ -n "$remaining_primary" ] || [ -n "$remaining_secondary" ]; then
+            if { [ -n "$remaining_primary" ] && [ "$remaining_primary" != "[]" ]; } || { [ -n "$remaining_secondary" ] && [ "$remaining_secondary" != "[]" ]; }; then
                 echo -e "${RED}Error: Some resources could not be cleaned up. Please check and clean up manually before proceeding.${NC}"
                 exit 1
             fi
@@ -940,12 +935,20 @@ run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-kms-tes
 run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-region-test' --value 'test' --type 'String' --region 'invalid-region-123'" \
     "Create parameter with invalid region (should fail)"
 
+# Test special characters in parameter values
+special_chars_value='value with special chars: !@#$%^&*(){}[]|\:;"<>?,./'
+run_cmd "$PARAMS2ENV create --path '/params2env-test/special-chars' --value '$special_chars_value' --type 'String' --region '${PRIMARY_REGION}'" \
+    "Create parameter with special characters"
+
+run_cmd "$PARAMS2ENV read --path '/params2env-test/special-chars' --region '${PRIMARY_REGION}'" \
+    "Read parameter with special characters"
+
 # Cleanup
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
 # Delete parameters
 echo -e "${YELLOW}Cleaning up SSM parameters...${NC}"
-for param in "/params2env-test/string-param" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/param1" "/params2env-test/param2"; do
+for param in "/params2env-test/string-param" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/param1" "/params2env-test/param2" "/params2env-test/special-chars"; do
     run_cmd "$PARAMS2ENV delete --path '$param' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Delete parameter: $param" || true
 done
