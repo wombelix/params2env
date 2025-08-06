@@ -422,6 +422,78 @@ params:
 	}
 }
 
+// TestErrorMessageFormatting tests the error message formatting logic in getParameterValue
+// to ensure proper context enrichment and actionable guidance without AWS mocking.
+func TestErrorMessageFormatting(t *testing.T) {
+	// Save original NewClient and restore after tests
+	origNewClient := aws.NewClient
+	defer func() { aws.NewClient = origNewClient }()
+
+	tests := []struct {
+		name           string
+		paramName      string
+		region         string
+		mockError      error
+		expectedFormat string
+	}{
+		{
+			name:           "not_found_error",
+			paramName:      "/test/param",
+			region:         "us-west-2",
+			mockError:      aws.ErrNotFound,
+			expectedFormat: "parameter '/test/param' not found in region 'us-west-2'",
+		},
+		{
+			name:           "access_denied_error",
+			paramName:      "/test/secret",
+			region:         "eu-central-1",
+			mockError:      aws.ErrNoAccess,
+			expectedFormat: "access denied to parameter '/test/secret' in region 'eu-central-1': check IAM permissions",
+		},
+		{
+			name:           "throttling_error",
+			paramName:      "/app/config",
+			region:         "us-east-1",
+			mockError:      fmt.Errorf("throttling error occurred"),
+			expectedFormat: "request throttled for parameter '/app/config' in region 'us-east-1': try again later",
+		},
+		{
+			name:           "generic_error_with_context",
+			paramName:      "/my/param",
+			region:         "ap-southeast-1",
+			mockError:      fmt.Errorf("network timeout"),
+			expectedFormat: "failed to get parameter '/my/param' from region 'ap-southeast-1'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock AWS client to return specific error
+			aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+				return &aws.Client{SSMClient: &aws.MockSSMClient{
+					GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+						return nil, tt.mockError
+					},
+				}}, nil
+			}
+
+			// Test getParameterValue function directly
+			_, err := getParameterValue(tt.paramName, tt.region, "")
+
+			// Verify error occurred
+			if err == nil {
+				t.Errorf("getParameterValue() expected error but got none")
+				return
+			}
+
+			// Verify error message formatting
+			if !containsString(err.Error(), tt.expectedFormat) {
+				t.Errorf("getParameterValue() error = %q, expected to contain %q", err.Error(), tt.expectedFormat)
+			}
+		})
+	}
+}
+
 // TestSecureFilePermissions verifies that files and directories created by writeOutput
 // have secure permissions to prevent unauthorized access to sensitive SSM parameter values.
 // Directories are created with 0700 (owner access only) and files with 0600 (owner read/write only).
