@@ -25,22 +25,11 @@ type modifyFlags struct {
 	description string
 }
 
-func setupModifyFlags(t *testing.T) {
-	// Reset flags before each test
-	modifyCmd.ResetFlags()
-	modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
-	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
-	modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
-	modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region")
-	modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN")
-	modifyCmd.Flags().StringVar(&modifyReplica, "replica", "", "Replica region")
-	// Add modify command to test root
-	testRoot.AddCommand(modifyCmd)
-}
+
 
 func runModifyTest(t *testing.T, ts *testSetup, flags modifyFlags, wantErr bool) {
 	ts.output.Reset()
-	setupModifyFlags(t)
+	setupModifyFlags()
 
 	args := buildArgs("modify", map[string]string{
 		"path":        flags.path,
