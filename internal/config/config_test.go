@@ -191,13 +191,13 @@ region: [invalid yaml
 		t.Fatalf("Failed to change to work directory: %v", err)
 	}
 
-	// Test loading invalid config
+	// Test loading invalid config - should now fail fast
 	cfg, err := LoadConfig()
-	if err != nil {
-		t.Errorf("LoadConfig() error = %v, want no error (warnings are logged)", err)
+	if err == nil {
+		t.Error("LoadConfig() error = nil, want error for invalid YAML")
 	}
-	if cfg == nil {
-		t.Error("LoadConfig() returned nil, want empty config")
+	if cfg != nil {
+		t.Error("LoadConfig() returned config, want nil for invalid YAML")
 	}
 }
 
@@ -226,13 +226,13 @@ func TestLoadConfigFilePermissionError(t *testing.T) {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
-	// Test loading config with unreadable file
+	// Test loading config with unreadable file - should now fail fast
 	cfg, err := LoadConfig()
-	if err != nil {
-		t.Errorf("LoadConfig() error = %v, want no error when config file is unreadable", err)
+	if err == nil {
+		t.Error("LoadConfig() error = nil, want error when config file is unreadable")
 	}
-	if cfg == nil {
-		t.Error("LoadConfig() returned nil, want empty config")
+	if cfg != nil {
+		t.Error("LoadConfig() returned config, want nil when config file is unreadable")
 	}
 }
 

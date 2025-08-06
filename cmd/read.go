@@ -66,7 +66,7 @@ func validateReadFlags(cmd *cobra.Command, args []string) error {
 	// Load config to check if parameters are defined
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	// Path is required only if no parameters are defined in config
@@ -100,7 +100,7 @@ func runRead(cmd *cobra.Command, args []string) error {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	// If path is not set but we have params in config, use those

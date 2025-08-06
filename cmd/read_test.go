@@ -338,3 +338,57 @@ params:
 		})
 	}
 }
+
+func TestRunReadWithInvalidConfig(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "params2env-test-invalid-config")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Save and restore environment
+	origHome := os.Getenv("HOME")
+	origRegion := os.Getenv("AWS_REGION")
+	defer func() {
+		_ = os.Setenv("HOME", origHome)
+		_ = os.Setenv("AWS_REGION", origRegion)
+	}()
+	_ = os.Setenv("HOME", tmpDir)
+	_ = os.Setenv("AWS_REGION", "eu-central-1")
+
+	// Create invalid config file
+	invalidConfigContent := []byte(`
+region: [invalid yaml
+params:
+  - name: /test
+`)
+	if err := os.WriteFile(filepath.Join(tmpDir, ".params2env.yaml"), invalidConfigContent, 0644); err != nil {
+		t.Fatalf("Failed to write invalid config file: %v", err)
+	}
+
+	// Create a test root command
+	testRoot := &cobra.Command{Use: "params2env"}
+
+	// Reset flags
+	readCmd.ResetFlags()
+	readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
+	readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
+	readCmd.Flags().StringVar(&readRole, "role", "", "AWS role ARN to assume (optional)")
+	readCmd.Flags().StringVar(&readFile, "file", "", "File to write to (optional)")
+	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
+	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
+	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+
+	// Add read command to test root
+	testRoot.AddCommand(readCmd)
+
+	// Execute command - should fail due to invalid config
+	testRoot.SetArgs([]string{"read", "--path", "/test/param"})
+	err = testRoot.Execute()
+
+	// Should fail with config error
+	if err == nil {
+		t.Error("Expected error due to invalid YAML config, but got none")
+	}
+}
