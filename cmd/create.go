@@ -208,7 +208,11 @@ func createInReplicaRegion() error {
 
 	var replicaKMSKeyID *string
 	if createKMS != "" {
-		replicaKMSKeyID = getReplicaKMSKeyID(createKMS, createReplica)
+		var err error
+		replicaKMSKeyID, err = getReplicaKMSKeyID(createKMS, createReplica)
+		if err != nil {
+			return fmt.Errorf("failed to process KMS key for replica region: %w", err)
+		}
 	}
 
 	if err := replicaClient.CreateParameter(ctx, createPath, createValue, createDesc, createType, replicaKMSKeyID, createOverwrite); err != nil {
@@ -219,26 +223,43 @@ func createInReplicaRegion() error {
 	return nil
 }
 
-// getReplicaKMSKeyID returns the KMS key ID for the replica region
-func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) *string {
-	const arnPrefix = "arn:aws:kms:"
-	const minARNParts = 6
-
-	// If not an ARN, use the key ID as is
-	if !strings.HasPrefix(kmsKeyID, arnPrefix) {
-		return &kmsKeyID
+// getReplicaKMSKeyID returns the KMS key ID for the replica region with proper ARN validation.
+// For KMS key aliases or key IDs, returns the input unchanged.
+// For KMS ARNs, validates the format and constructs a new ARN for the replica region.
+func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) (*string, error) {
+	// Check if it looks like an ARN (starts with "arn:")
+	if !strings.HasPrefix(kmsKeyID, "arn:") {
+		// Not an ARN, treat as alias or key ID
+		return &kmsKeyID, nil
 	}
 
-	// Extract account ID and key ID from the ARN
+	// Parse ARN with validation
 	arnParts := strings.Split(kmsKeyID, ":")
-	if len(arnParts) < minARNParts {
-		return &kmsKeyID
+	if len(arnParts) != 6 {
+		return nil, fmt.Errorf("invalid KMS ARN format: %s", kmsKeyID)
+	}
+
+	if arnParts[0] != "arn" || arnParts[1] != "aws" || arnParts[2] != "kms" {
+		return nil, fmt.Errorf("invalid KMS ARN format: %s", kmsKeyID)
 	}
 
 	accountID := arnParts[4]
-	keyID := arnParts[5]
-	replicaARN := fmt.Sprintf("%s%s:%s:%s", arnPrefix, replicaRegion, accountID, keyID)
-	return &replicaARN
+	if accountID == "" {
+		return nil, fmt.Errorf("missing account ID in KMS ARN: %s", kmsKeyID)
+	}
+
+	keyPart := arnParts[5]
+	if !strings.HasPrefix(keyPart, "key/") {
+		return nil, fmt.Errorf("invalid key format in KMS ARN: %s", kmsKeyID)
+	}
+
+	keyID := strings.TrimPrefix(keyPart, "key/")
+	if keyID == "" {
+		return nil, fmt.Errorf("missing key ID in KMS ARN: %s", kmsKeyID)
+	}
+
+	replicaARN := fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", replicaRegion, accountID, keyID)
+	return &replicaARN, nil
 }
 
 func init() {

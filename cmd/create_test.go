@@ -211,3 +211,108 @@ role: arn:aws:iam::123456789012:role/test
 		})
 	}
 }
+
+// TestGetReplicaKMSKeyID tests the KMS ARN parsing and validation logic.
+// This ensures proper handling of various KMS key formats and prevents data loss
+// from malformed ARN parsing that could result in wrong KMS key usage.
+func TestGetReplicaKMSKeyID(t *testing.T) {
+	tests := []struct {
+		name        string
+		kmsKeyID    string
+		region      string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "valid_arn",
+			kmsKeyID:    "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+			region:      "us-west-2",
+			expected:    "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+			expectError: false,
+		},
+		{
+			name:        "alias",
+			kmsKeyID:    "alias/my-key",
+			region:      "us-west-2",
+			expected:    "alias/my-key",
+			expectError: false,
+		},
+		{
+			name:        "key_id",
+			kmsKeyID:    "12345678-1234-1234-1234-123456789012",
+			region:      "us-west-2",
+			expected:    "12345678-1234-1234-1234-123456789012",
+			expectError: false,
+		},
+		{
+			name:        "invalid_arn_too_few_parts",
+			kmsKeyID:    "arn:aws:kms:us-east-1",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "invalid_arn_too_many_parts",
+			kmsKeyID:    "arn:aws:kms:us-east-1:123456789012:key:extra:part",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "empty_account",
+			kmsKeyID:    "arn:aws:kms:us-east-1::key/123",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "invalid_service",
+			kmsKeyID:    "arn:aws:s3:us-east-1:123456789012:key/123",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "missing_key_prefix",
+			kmsKeyID:    "arn:aws:kms:us-east-1:123456789012:123",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "empty_key_id",
+			kmsKeyID:    "arn:aws:kms:us-east-1:123456789012:key/",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "invalid_arn_prefix",
+			kmsKeyID:    "arn:invalid:kms:us-east-1:123456789012:key/123",
+			region:      "us-west-2",
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := getReplicaKMSKeyID(tt.kmsKeyID, tt.region)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("getReplicaKMSKeyID() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+
+			if !tt.expectError {
+				if result == nil {
+					t.Error("getReplicaKMSKeyID() returned nil result for valid input")
+					return
+				}
+				if *result != tt.expected {
+					t.Errorf("getReplicaKMSKeyID() = %q, want %q", *result, tt.expected)
+				}
+			}
+		})
+	}
+}
