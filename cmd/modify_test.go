@@ -5,10 +5,16 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/config"
 )
+
+// containsString checks if a string contains a substring (case-insensitive)
+func containsString(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
 
 type modifyFlags struct {
 	path        string
@@ -112,6 +118,52 @@ func TestRunModify(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("runModify() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestModifyInputValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		value   string
+		region  string
+		replica string
+		role    string
+		wantErr bool
+		errMsg  string
+	}{
+		{"valid_input", "/test/param", "value", "us-west-2", "us-east-1", "", false, ""},
+		{"empty_path", "", "value", "us-west-2", "", "", true, "path\" not set"},
+		{"empty_value", "/test/param", "", "us-west-2", "", "", true, "value\" not set"},
+		{"invalid_path", "invalid-path", "value", "us-west-2", "", "", true, "parameter path"},
+		{"invalid_region", "/test/param", "value", "invalid-region", "", "", true, "invalid region"},
+		{"invalid_replica", "/test/param", "value", "us-west-2", "invalid-region", "", true, "invalid replica region"},
+		{"invalid_role", "/test/param", "value", "us-west-2", "", "invalid-role", true, "invalid role ARN"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set global variables for validation
+			modifyPath = tt.path
+			modifyValue = tt.value
+			modifyRegion = tt.region
+			modifyReplica = tt.replica
+			modifyRole = tt.role
+
+			// Test validation function directly (focuses on input validation only)
+			err := validateModifyFlags(nil, nil)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateModifyFlags() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("validateModifyFlags() error = %v, expected to contain %q", err, tt.errMsg)
+				}
 			}
 		})
 	}
