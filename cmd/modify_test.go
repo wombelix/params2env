@@ -82,6 +82,11 @@ func TestRunModify(t *testing.T) {
 			flags:   modifyFlags{path: "/test/param", value: "test", region: "invalid-region"},
 			wantErr: true,
 		},
+		{
+			name:    "same_region_validation",
+			flags:   modifyFlags{path: "/test/param", value: "test", region: "us-west-2", replica: "us-west-2"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

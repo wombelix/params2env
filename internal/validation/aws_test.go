@@ -256,3 +256,46 @@ func TestValidateRoleARN(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRegions(t *testing.T) {
+	tests := []struct {
+		name    string
+		primary string
+		replica string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "different_regions",
+			primary: "us-east-1",
+			replica: "us-west-2",
+			wantErr: false,
+		},
+		{
+			name:    "empty_replica",
+			primary: "us-east-1",
+			replica: "",
+			wantErr: false,
+		},
+		{
+			name:    "same_regions",
+			primary: "us-east-1",
+			replica: "us-east-1",
+			wantErr: true,
+			errMsg:  "replica region 'us-east-1' cannot be the same as primary region 'us-east-1'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRegions(tt.primary, tt.replica)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateRegions() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && err.Error() != tt.errMsg {
+				t.Errorf("ValidateRegions() error = %v, want %v", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}

@@ -96,6 +96,15 @@ func TestRunDelete(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "same_region_validation",
+			flags: deleteFlags{
+				path:    "/test/param",
+				region:  "us-west-2",
+				replica: "us-west-2",
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

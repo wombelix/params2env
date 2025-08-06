@@ -99,3 +99,12 @@ func ValidateRoleARN(arn string) error {
 	}
 	return nil
 }
+
+// ValidateRegions ensures replica region differs from primary region.
+// This prevents unnecessary duplicate operations and potential confusion.
+func ValidateRegions(primary, replica string) error {
+	if replica != "" && primary == replica {
+		return fmt.Errorf("replica region '%s' cannot be the same as primary region '%s'", replica, primary)
+	}
+	return nil
+}

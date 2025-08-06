@@ -104,6 +104,11 @@ func runModify(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate regions are different
+	if err := validation.ValidateRegions(modifyRegion, modifyReplica); err != nil {
+		return err
+	}
+
 	// Modify parameter in primary region
 	if err := modifyInPrimaryRegion(); err != nil {
 		return err

@@ -96,6 +96,11 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate regions are different
+	if err := validation.ValidateRegions(deleteRegion, deleteReplica); err != nil {
+		return err
+	}
+
 	// Delete parameter in primary region
 	if err := deleteInPrimaryRegion(); err != nil {
 		return err

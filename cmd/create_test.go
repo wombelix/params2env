@@ -73,6 +73,11 @@ func TestRunCreate(t *testing.T) {
 			flags:   createFlags{path: "/test/param", value: "test", region: "invalid-region"},
 			wantErr: true,
 		},
+		{
+			name:    "same_region_validation",
+			flags:   createFlags{path: "/test/param", value: "test", region: "us-west-2", replica: "us-west-2"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

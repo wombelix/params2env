@@ -122,6 +122,11 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate regions are different
+	if err := validation.ValidateRegions(createRegion, createReplica); err != nil {
+		return err
+	}
+
 	// Create parameter in primary region
 	if err := createInPrimaryRegion(); err != nil {
 		return err
