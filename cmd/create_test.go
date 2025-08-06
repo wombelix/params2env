@@ -78,6 +78,16 @@ func TestRunCreate(t *testing.T) {
 			flags:   createFlags{path: "/test/param", value: "test", region: "us-west-2", replica: "us-west-2"},
 			wantErr: true,
 		},
+		{
+			name:    "secure_string_without_kms",
+			flags:   createFlags{path: "/test/param", value: "test", paramType: "SecureString", region: "us-west-2"},
+			wantErr: true,
+		},
+		{
+			name:    "secure_string_with_kms",
+			flags:   createFlags{path: "/test/param", value: "test", paramType: "SecureString", kms: "alias/test-key", region: "us-west-2"},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

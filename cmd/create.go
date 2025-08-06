@@ -127,6 +127,11 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate SecureString requirements
+	if err := validation.ValidateSecureStringRequirements(createType, createKMS); err != nil {
+		return err
+	}
+
 	// Create parameter in primary region
 	if err := createInPrimaryRegion(); err != nil {
 		return err

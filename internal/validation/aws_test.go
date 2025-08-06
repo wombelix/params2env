@@ -299,3 +299,52 @@ func TestValidateRegions(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSecureStringRequirements(t *testing.T) {
+	tests := []struct {
+		name      string
+		paramType string
+		kmsKey    string
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "string_type_no_kms",
+			paramType: "String",
+			kmsKey:    "",
+			wantErr:   false,
+		},
+		{
+			name:      "string_type_with_kms",
+			paramType: "String",
+			kmsKey:    "alias/test-key",
+			wantErr:   false,
+		},
+		{
+			name:      "secure_string_with_kms",
+			paramType: "SecureString",
+			kmsKey:    "alias/test-key",
+			wantErr:   false,
+		},
+		{
+			name:      "secure_string_without_kms",
+			paramType: "SecureString",
+			kmsKey:    "",
+			wantErr:   true,
+			errMsg:    "KMS key is required for SecureString parameters",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateSecureStringRequirements(tt.paramType, tt.kmsKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateSecureStringRequirements() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && err.Error() != tt.errMsg {
+				t.Errorf("ValidateSecureStringRequirements() error = %v, want %v", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}

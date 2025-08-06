@@ -108,3 +108,12 @@ func ValidateRegions(primary, replica string) error {
 	}
 	return nil
 }
+
+// ValidateSecureStringRequirements ensures KMS key is provided for SecureString parameters.
+// This prevents accidental use of AWS managed keys when custom encryption is expected.
+func ValidateSecureStringRequirements(paramType, kmsKey string) error {
+	if paramType == "SecureString" && kmsKey == "" {
+		return fmt.Errorf("KMS key is required for SecureString parameters")
+	}
+	return nil
+}
