@@ -102,19 +102,8 @@ func TestRunCreate(t *testing.T) {
 			}
 			ts.setupMockClient(mockClient)
 
-			// Reset flags before each test
-			createCmd.ResetFlags()
-			createCmd.Flags().StringVar(&createPath, "path", "", "Parameter path (required)")
-			createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value (required)")
-			createCmd.Flags().StringVar(&createType, "type", "String", "Parameter type")
-			createCmd.Flags().StringVar(&createDesc, "description", "", "Parameter description")
-			createCmd.Flags().StringVar(&createKMS, "kms", "", "KMS key ID")
-			createCmd.Flags().StringVar(&createRegion, "region", "", "AWS region")
-			createCmd.Flags().StringVar(&createRole, "role", "", "AWS role ARN")
-			createCmd.Flags().StringVar(&createReplica, "replica", "", "Replica region")
-			createCmd.Flags().BoolVar(&createOverwrite, "overwrite", false, "Overwrite existing")
-
-			// Add create command to test root
+			// Setup flags using helper
+			setupCreateFlags()
 			testRoot.AddCommand(createCmd)
 
 			// Build args
@@ -193,19 +182,8 @@ role: arn:aws:iam::123456789012:role/test
 		t.Run(tt.name, func(t *testing.T) {
 			ts.output.Reset()
 
-			// Reset flags before each test
-			createCmd.ResetFlags()
-			createCmd.Flags().StringVar(&createPath, "path", "", "Parameter path (required)")
-			createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value (required)")
-			createCmd.Flags().StringVar(&createType, "type", "String", "Parameter type")
-			createCmd.Flags().StringVar(&createDesc, "description", "", "Parameter description")
-			createCmd.Flags().StringVar(&createKMS, "kms", "", "KMS key ID")
-			createCmd.Flags().StringVar(&createRegion, "region", "", "AWS region")
-			createCmd.Flags().StringVar(&createRole, "role", "", "AWS role ARN")
-			createCmd.Flags().StringVar(&createReplica, "replica", "", "Replica region")
-			createCmd.Flags().BoolVar(&createOverwrite, "overwrite", false, "Overwrite existing")
-
-			// Add create command to test root
+			// Setup flags using helper
+			setupCreateFlags()
 			testRoot.AddCommand(createCmd)
 
 			// Build args
