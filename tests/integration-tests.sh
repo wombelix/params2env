@@ -45,35 +45,51 @@ validate_environment() {
         return 1
     fi
 
+    # Auto-detect AWS_IAM_PRINCIPAL if not set
     if [ -z "${AWS_IAM_PRINCIPAL}" ]; then
-        missing_vars+=("AWS_IAM_PRINCIPAL")
-    else
-        # Get current identity
-        local current_identity
-        current_identity=$(aws sts get-caller-identity --query 'Arn' --output text)
+        echo -e "${YELLOW}AWS_IAM_PRINCIPAL not set, attempting to detect from current identity...${NC}"
 
-        if [[ $AWS_IAM_PRINCIPAL =~ ^arn:aws:(iam|sts)::[0-9]{12}:(user/|role/|assumed-role/|federated-user/|root$) ]]; then
-            # For assumed roles, we need to convert the principal to the base role ARN
-            if [[ $AWS_IAM_PRINCIPAL =~ ^arn:aws:sts::[0-9]{12}:assumed-role/([^/]+)/ ]]; then
-                local role_name="${BASH_REMATCH[1]}"
-                local account_id
-                account_id=$(echo "$AWS_IAM_PRINCIPAL" | cut -d: -f5)
-                AWS_IAM_PRINCIPAL="arn:aws:iam::${account_id}:role/${role_name}"
-                echo -e "${YELLOW}Converting assumed role to base role ARN: ${AWS_IAM_PRINCIPAL}${NC}"
-            fi
+        local current_identity
+        if ! current_identity=$(aws sts get-caller-identity --query 'Arn' --output text 2>/dev/null); then
+            echo -e "${RED}Error: Failed to get current AWS identity. Please ensure AWS credentials are configured.${NC}"
+            return 1
+        fi
+
+        echo -e "${YELLOW}Current identity: $current_identity${NC}"
+
+        # Convert assumed role to base role ARN
+        if [[ $current_identity =~ ^arn:aws:sts::[0-9]{12}:assumed-role/([^/]+)/ ]]; then
+            local role_name="${BASH_REMATCH[1]}"
+            local account_id
+            account_id=$(echo "$current_identity" | cut -d: -f5)
+            AWS_IAM_PRINCIPAL="arn:aws:iam::${account_id}:role/${role_name}"
+            echo -e "${GREEN}Auto-detected IAM principal: ${AWS_IAM_PRINCIPAL}${NC}"
+        elif [[ $current_identity =~ ^arn:aws:iam::[0-9]{12}:(user|role)/ ]]; then
+            AWS_IAM_PRINCIPAL="$current_identity"
+            echo -e "${GREEN}Auto-detected IAM principal: ${AWS_IAM_PRINCIPAL}${NC}"
         else
-            echo -e "${RED}Error: AWS_IAM_PRINCIPAL must be a valid IAM ARN${NC}"
+            echo -e "${RED}Error: Unable to determine IAM principal from current identity${NC}"
             echo -e "${YELLOW}Current identity: $current_identity${NC}"
-            echo -e "${YELLOW}For AWS SSO or federated users, use the role ARN from your identity:${NC}"
-            echo -e "Example: If your identity is:"
-            echo -e "  arn:aws:sts::123456789012:assumed-role/AWSReservedSSO_RoleName_123/user@example.com"
-            echo -e "Use:"
-            echo -e "  arn:aws:iam::123456789012:role/AWSReservedSSO_RoleName_123"
+            echo -e "${YELLOW}Please set AWS_IAM_PRINCIPAL manually to a valid IAM user or role ARN${NC}"
+            return 1
+        fi
+
+        export AWS_IAM_PRINCIPAL
+    else
+        # Validate provided AWS_IAM_PRINCIPAL
+        if [[ $AWS_IAM_PRINCIPAL =~ ^arn:aws:sts::[0-9]{12}:assumed-role/([^/]+)/ ]]; then
+            local role_name="${BASH_REMATCH[1]}"
+            local account_id
+            account_id=$(echo "$AWS_IAM_PRINCIPAL" | cut -d: -f5)
+            AWS_IAM_PRINCIPAL="arn:aws:iam::${account_id}:role/${role_name}"
+            echo -e "${YELLOW}Converting assumed role to base role ARN: ${AWS_IAM_PRINCIPAL}${NC}"
+        elif ! [[ $AWS_IAM_PRINCIPAL =~ ^arn:aws:iam::[0-9]{12}:(user|role)/.+ ]]; then
+            echo -e "${RED}Error: AWS_IAM_PRINCIPAL must be a valid IAM ARN${NC}"
             return 1
         fi
     fi
 
-    # If any variables are missing, print them and return error
+    # If any other variables are missing, print them and return error
     if [ ${#missing_vars[@]} -ne 0 ]; then
         echo -e "${RED}Error: Missing required environment variables:${NC}"
         for var in "${missing_vars[@]}"; do
@@ -82,8 +98,8 @@ validate_environment() {
         echo -e "\nPlease set them before running this script:"
         echo -e "${GREEN}export AWS_ACCOUNT_ID=\"123456789012\"  # Your AWS account ID"
         echo -e "export PRIMARY_REGION=\"eu-central-1\"   # Your primary region"
-        echo -e "export SECONDARY_REGION=\"eu-west-1\"    # Your secondary region"
-        echo -e "export AWS_IAM_PRINCIPAL=\"arn:aws:iam::\${AWS_ACCOUNT_ID}:role/YourRoleName\"  # Your IAM ARN${NC}"
+        echo -e "export SECONDARY_REGION=\"eu-west-1\"    # Your secondary region${NC}"
+        echo -e "${YELLOW}# AWS_IAM_PRINCIPAL will be auto-detected from your current AWS identity${NC}"
         return 1
     fi
 
@@ -95,10 +111,10 @@ cleanup_ssm_parameters() {
     local region=$1
     echo -e "${YELLOW}Cleaning up parameters in ${region}...${NC}"
 
-    # Get all parameters under /test/ path recursively
+    # Get all parameters under /params2env-test/ path recursively
     local params
     params=$(aws ssm get-parameters-by-path \
-        --path "/test/" \
+        --path "/params2env-test/" \
         --recursive \
         --region "${region}" \
         --query 'Parameters[].Name' \
@@ -123,7 +139,7 @@ cleanup_ssm_parameters() {
         # Verify all parameters are deleted
         local remaining_params
         remaining_params=$(aws ssm get-parameters-by-path \
-            --path "/test/" \
+            --path "/params2env-test/" \
             --recursive \
             --region "${region}" \
             --query 'Parameters[].Name' \
@@ -136,7 +152,7 @@ cleanup_ssm_parameters() {
             echo -e "${GREEN}All parameters successfully deleted in ${region}${NC}"
         fi
     else
-        echo -e "${GREEN}No parameters found under /test/ in ${region}${NC}"
+        echo -e "${GREEN}No parameters found under /params2env-test/ in ${region}${NC}"
     fi
 }
 
@@ -264,14 +280,14 @@ check_existing_resources() {
     # Check for parameters in primary region
     local primary_params
     primary_params=$(aws ssm get-parameters-by-path \
-        --path "/test/" \
+        --path "/params2env-test/" \
         --recursive \
         --region "${PRIMARY_REGION}" \
         --query 'Parameters[].Name' \
         --output text 2>/dev/null)
 
     if [ -n "$primary_params" ]; then
-        found_resources+=("SSM Parameters in ${PRIMARY_REGION} under /test/")
+        found_resources+=("SSM Parameters in ${PRIMARY_REGION} under /params2env-test/")
         # Convert space-separated list to array using read
         local param_array
         IFS=' ' read -r -a param_array <<< "$primary_params"
@@ -283,14 +299,14 @@ check_existing_resources() {
     # Check for parameters in secondary region
     local secondary_params
     secondary_params=$(aws ssm get-parameters-by-path \
-        --path "/test/" \
+        --path "/params2env-test/" \
         --recursive \
         --region "${SECONDARY_REGION}" \
         --query 'Parameters[].Name' \
         --output text 2>/dev/null)
 
     if [ -n "$secondary_params" ]; then
-        found_resources+=("SSM Parameters in ${SECONDARY_REGION} under /test/")
+        found_resources+=("SSM Parameters in ${SECONDARY_REGION} under /params2env-test/")
         # Convert space-separated list to array using read
         local param_array
         IFS=' ' read -r -a param_array <<< "$secondary_params"
@@ -312,9 +328,9 @@ check_existing_resources() {
 
             # Verify cleanup was successful
             local remaining_primary
-            remaining_primary=$(aws ssm get-parameters-by-path --path "/test/" --recursive --region "${PRIMARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
+            remaining_primary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${PRIMARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
             local remaining_secondary
-            remaining_secondary=$(aws ssm get-parameters-by-path --path "/test/" --recursive --region "${SECONDARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
+            remaining_secondary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${SECONDARY_REGION}" --query 'Parameters[].Name' --output text 2>/dev/null)
 
             if [ -n "$remaining_primary" ] || [ -n "$remaining_secondary" ]; then
                 echo -e "${RED}Error: Some resources could not be cleaned up. Please check and clean up manually before proceeding.${NC}"
@@ -364,7 +380,7 @@ create_iam_policy() {
                     "ssm:ListTagsForResource"
                 ],
                 "Resource": [
-                    "arn:aws:ssm:*:'${AWS_ACCOUNT_ID}':parameter/test/*"
+                    "arn:aws:ssm:*:'${AWS_ACCOUNT_ID}':parameter/params2env-test/*"
                 ]
             },
             {
@@ -384,7 +400,7 @@ create_iam_policy() {
     # Create policy
     if ! aws iam create-policy \
         --policy-name params2env-test-policy \
-        --policy-document "$policy_document"; then
+        --policy-document "$policy_document" --no-cli-pager; then
         echo -e "${RED}Failed to create IAM policy${NC}"
         exit 1
     fi
@@ -406,7 +422,7 @@ print_resource_info() {
     echo "   - Role: params2env-test-role"
     echo "   - Policy: params2env-test-policy"
     echo "   Policy will be scoped to:"
-    echo "   - SSM parameters under /test/* only"
+    echo "   - SSM parameters under /params2env-test/* only"
 
     if [ -n "${PRIMARY_KEY_ID}" ] && [ -n "${REPLICA_KEY_ID}" ]; then
         echo "   - Using existing KMS keys:"
@@ -418,15 +434,15 @@ print_resource_info() {
 
     echo
     echo "2. SSM Parameters:"
-    echo "   All parameters will be created under /test/* prefix:"
-    echo "   - /test/string-param"
-    echo "   - /test/string-param-no-role"
-    echo "   - /test/secure-param-aws"
+    echo "   All parameters will be created under /params2env-test/* prefix:"
+    echo "   - /params2env-test/string-param"
+    echo "   - /params2env-test/string-param-no-role"
+    echo "   - /params2env-test/secure-param-aws"
     if [ -n "${PRIMARY_KEY_ID}" ] && [ -n "${REPLICA_KEY_ID}" ]; then
-        echo "   - /test/secure-param-custom"
+        echo "   - /params2env-test/secure-param-custom"
     fi
-    echo "   - /test/param1"
-    echo "   - /test/param2"
+    echo "   - /params2env-test/param1"
+    echo "   - /params2env-test/param2"
 
     if [ -n "${PRIMARY_KEY_ID}" ] && [ -n "${REPLICA_KEY_ID}" ]; then
         echo
@@ -560,7 +576,7 @@ create_iam_role() {
     # Create role
     if ! aws iam create-role \
         --role-name params2env-test-role \
-        --assume-role-policy-document "$trust_policy"; then
+        --assume-role-policy-document "$trust_policy" --no-cli-pager; then
         echo -e "${RED}Failed to create IAM role${NC}"
         exit 1
     fi
@@ -568,7 +584,7 @@ create_iam_role() {
     # Attach policy to role
     if ! aws iam attach-role-policy \
         --role-name params2env-test-role \
-        --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy"; then
+        --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy" --no-cli-pager; then
         echo -e "${RED}Failed to attach policy to role${NC}"
         exit 1
     fi
@@ -771,12 +787,12 @@ upper: true
 tags:
   Purpose: params2env-test
 params:
-  - name: /test/param1
+  - name: /params2env-test/param1
     env: PARAM_ONE
     region: ${PRIMARY_REGION}
     tags:
       Purpose: params2env-test
-  - name: /test/param2
+  - name: /params2env-test/param2
     env: PARAM_TWO
     region: ${SECONDARY_REGION}
     tags:
@@ -789,70 +805,70 @@ envsubst < .params2env.yaml.template > .params2env.yaml
 echo -e "\n${GREEN}=== Testing String Parameters ===${NC}"
 
 # Test with role
-run_cmd "$PARAMS2ENV create --path '/test/string-param' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
+run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
     "Create String parameter (with role)"
 
-run_cmd "$PARAMS2ENV read --path '/test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
     "Read String parameter (with role)"
 
 # Test without role
-run_cmd "$PARAMS2ENV create --path '/test/string-param-no-role' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param-no-role' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Create String parameter (without role)"
 
-run_cmd "$PARAMS2ENV read --path '/test/string-param-no-role' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param-no-role' --region '${PRIMARY_REGION}'" \
     "Read String parameter (without role)"
 
-run_cmd "$PARAMS2ENV read --path '/test/string-param' --env 'TEST_STRING_PARAM' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --env 'TEST_STRING_PARAM' --region '${PRIMARY_REGION}'" \
     "Read String parameter (custom env name)"
 
-run_cmd "$PARAMS2ENV read --path '/test/string-param' --env-prefix 'TEST' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --env-prefix 'TEST' --region '${PRIMARY_REGION}'" \
     "Read String parameter (with prefix)"
 
-run_cmd "$PARAMS2ENV read --path '/test/string-param' --file './test-string.env' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --file './test-string.env' --region '${PRIMARY_REGION}'" \
     "Read String parameter (to file)"
 
-run_cmd "$PARAMS2ENV modify --path '/test/string-param' --value 'test-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+run_cmd "$PARAMS2ENV modify --path '/params2env-test/string-param' --value 'test-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Modify String parameter"
 
 # Test SecureString Parameters with AWS Managed Key
 echo -e "\n${GREEN}=== Testing SecureString Parameters (AWS Managed Key) ===${NC}"
 
-run_cmd "$PARAMS2ENV create --path '/test/secure-param-aws' --value 'secure-value-1' --type 'SecureString' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+run_cmd "$PARAMS2ENV create --path '/params2env-test/secure-param-aws' --value 'secure-value-1' --type 'SecureString' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Create SecureString parameter (AWS managed key)"
 
-run_cmd "$PARAMS2ENV read --path '/test/secure-param-aws' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-aws' --region '${PRIMARY_REGION}'" \
     "Read SecureString parameter (default output)"
 
-run_cmd "$PARAMS2ENV read --path '/test/secure-param-aws' --file './test-secure-aws.env' --region '${PRIMARY_REGION}'" \
+run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-aws' --file './test-secure-aws.env' --region '${PRIMARY_REGION}'" \
     "Read SecureString parameter (to file)"
 
-run_cmd "$PARAMS2ENV modify --path '/test/secure-param-aws' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+run_cmd "$PARAMS2ENV modify --path '/params2env-test/secure-param-aws' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Modify SecureString parameter"
 
 # Test SecureString Parameters with Customer Managed Key (if enabled)
 if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
     echo -e "\n${GREEN}=== Testing SecureString Parameters (Customer Managed Key) ===${NC}"
 
-    run_cmd "$PARAMS2ENV create --path '/test/secure-param-custom' --value 'secure-value-1' --type 'SecureString' --kms 'arn:aws:kms:${PRIMARY_REGION}:${AWS_ACCOUNT_ID}:key/${PRIMARY_KEY_ID}' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    run_cmd "$PARAMS2ENV create --path '/params2env-test/secure-param-custom' --value 'secure-value-1' --type 'SecureString' --kms 'arn:aws:kms:${PRIMARY_REGION}:${AWS_ACCOUNT_ID}:key/${PRIMARY_KEY_ID}' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Create SecureString parameter (custom key)"
 
-    run_cmd "$PARAMS2ENV read --path '/test/secure-param-custom' --region '${PRIMARY_REGION}'" \
+    run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-custom' --region '${PRIMARY_REGION}'" \
         "Read SecureString parameter (default output)"
 
-    run_cmd "$PARAMS2ENV read --path '/test/secure-param-custom' --file './test-secure-custom.env' --region '${PRIMARY_REGION}'" \
+    run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-custom' --file './test-secure-custom.env' --region '${PRIMARY_REGION}'" \
         "Read SecureString parameter (to file)"
 
-    run_cmd "$PARAMS2ENV modify --path '/test/secure-param-custom' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    run_cmd "$PARAMS2ENV modify --path '/params2env-test/secure-param-custom' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Modify SecureString parameter"
 fi
 
 # Test Configuration File
 echo -e "\n${GREEN}=== Testing Configuration File ===${NC}"
 
-run_cmd "$PARAMS2ENV create --path '/test/param1' --value 'config-value-1' --type 'String'" \
+run_cmd "$PARAMS2ENV create --path '/params2env-test/param1' --value 'config-value-1' --type 'String'" \
     "Create first parameter from config"
 
-run_cmd "$PARAMS2ENV create --path '/test/param2' --value 'config-value-2' --type 'String'" \
+run_cmd "$PARAMS2ENV create --path '/params2env-test/param2' --value 'config-value-2' --type 'String'" \
     "Create second parameter from config"
 
 run_cmd "$PARAMS2ENV read" \
@@ -861,24 +877,56 @@ run_cmd "$PARAMS2ENV read" \
 run_cmd "$PARAMS2ENV read --file './test-config.env'" \
     "Read all parameters to file"
 
-run_cmd "$PARAMS2ENV modify --path '/test/param1' --value 'config-value-1-modified'" \
+run_cmd "$PARAMS2ENV modify --path '/params2env-test/param1' --value 'config-value-1-modified'" \
     "Modify first parameter"
 
-run_cmd "$PARAMS2ENV modify --path '/test/param2' --value 'config-value-2-modified'" \
+run_cmd "$PARAMS2ENV modify --path '/params2env-test/param2' --value 'config-value-2-modified'" \
     "Modify second parameter"
+
+# Function to test expected failures
+run_cmd_expect_fail() {
+    local cmd=$1
+    local description=$2
+
+    echo -n "Running: $description"
+    echo "$cmd"
+
+    if eval "$cmd" >/dev/null 2>&1; then
+        echo -e "${RED}✗ Failed - should have failed but succeeded${NC}"
+        return 1
+    else
+        echo -e "${GREEN}✓ Success - correctly failed as expected${NC}"
+        return 0
+    fi
+}
+
+# Test Error Scenarios
+echo -e "\n${GREEN}=== Testing Error Scenarios ===${NC}"
+
+run_cmd_expect_fail "$PARAMS2ENV read --path '/params2env-test/nonexistent-param' --region '${PRIMARY_REGION}'" \
+    "Read non-existent parameter (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV modify --path '/params2env-test/nonexistent-param' --value 'test' --region '${PRIMARY_REGION}'" \
+    "Modify non-existent parameter (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV delete --path '/params2env-test/nonexistent-param' --region '${PRIMARY_REGION}'" \
+    "Delete non-existent parameter (should fail)"
+
+run_cmd_expect_fail "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/nonexistent-role'" \
+    "Read with invalid IAM role (should fail)"
 
 # Cleanup
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
 # Delete parameters
 echo -e "${YELLOW}Cleaning up SSM parameters...${NC}"
-for param in "/test/string-param" "/test/string-param-no-role" "/test/secure-param-aws" "/test/param1" "/test/param2"; do
+for param in "/params2env-test/string-param" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/param1" "/params2env-test/param2"; do
     run_cmd "$PARAMS2ENV delete --path '$param' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Delete parameter: $param" || true
 done
 
 if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
-    run_cmd "$PARAMS2ENV delete --path '/test/secure-param-custom' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    run_cmd "$PARAMS2ENV delete --path '/params2env-test/secure-param-custom' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Delete SecureString parameter (custom key)" || true
 fi
 
