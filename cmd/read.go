@@ -236,14 +236,18 @@ func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 	return name
 }
 
-// writeOutput writes the parameter value(s) to a file or stdout
+// writeOutput writes the parameter value(s) to a file or stdout.
+// When writing to files, secure permissions are used to protect sensitive SSM parameter values:
+// - Directories: 0700 (owner access only) to prevent unauthorized directory traversal
+// - Files: 0600 (owner read/write only) to prevent unauthorized access to secrets
 func writeOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
 	if readFile == "" && cfg != nil {
 		readFile = cfg.File
 	}
 
 	if readFile != "" {
-		// Ensure directory exists
+		// Ensure directory exists with secure permissions (0700 - owner access only)
+		// This prevents other users from accessing the directory containing sensitive parameter files
 		dir := filepath.Dir(readFile)
 		// Ensure directory exists with secure permissions (0700 = owner full access only)
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -255,9 +259,8 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 			fmt.Printf("Reading parameter '%s' from region '%s'\n", param.Name, readRegion)
 		}
 
-		// Write to file
-		// nosemgrep: go-poor-write-permissions
-		// False positive: 0600 is secure for sensitive parameter files (owner read/write only)
+		// Write to file with secure permissions (0600 - owner read/write only)
+		// This prevents other users from reading sensitive SSM parameter values
 		if err := os.WriteFile(readFile, []byte(output), 0600); err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}

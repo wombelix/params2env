@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
+	"git.sr.ht/~wombelix/params2env/internal/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/spf13/cobra"
@@ -390,5 +391,79 @@ params:
 	// Should fail with config error
 	if err == nil {
 		t.Error("Expected error due to invalid YAML config, but got none")
+	}
+}
+
+// TestSecureFilePermissions verifies that files and directories created by writeOutput
+// have secure permissions to prevent unauthorized access to sensitive SSM parameter values.
+// Directories are created with 0700 (owner access only) and files with 0600 (owner read/write only).
+func TestSecureFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir() // Automatically cleaned up
+
+	tests := []struct {
+		name     string
+		filePath string
+	}{
+		{
+			name:     "file_in_existing_dir",
+			filePath: filepath.Join(tmpDir, "test.env"),
+		},
+		{
+			name:     "file_in_nested_dir",
+			filePath: filepath.Join(tmpDir, "nested", "dir", "test.env"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test data
+			output := "export TEST_PARAM=\"secret-value\"\n"
+			params := []config.ParamConfig{{Name: "/test/param"}}
+
+			// Set readFile to test path
+			origReadFile := readFile
+			readFile = tt.filePath
+			defer func() { readFile = origReadFile }()
+
+			// Call writeOutput to create file with secure permissions
+			err := writeOutput(output, params, nil)
+			if err != nil {
+				t.Fatalf("writeOutput failed: %v", err)
+			}
+
+			// Verify file was created and has correct content
+			content, err := os.ReadFile(tt.filePath)
+			if err != nil {
+				t.Fatalf("Failed to read created file: %v", err)
+			}
+			if string(content) != output {
+				t.Errorf("File content = %q, want %q", string(content), output)
+			}
+
+			// Verify file permissions are secure (0600 - owner read/write only)
+			fileInfo, err := os.Stat(tt.filePath)
+			if err != nil {
+				t.Fatalf("Failed to stat file: %v", err)
+			}
+			fileMode := fileInfo.Mode().Perm()
+			expectedFileMode := os.FileMode(0600)
+			if fileMode != expectedFileMode {
+				t.Errorf("File permissions = %o, want %o (owner read/write only)", fileMode, expectedFileMode)
+			}
+
+			// Verify directory permissions are secure (0700 - owner access only)
+			dir := filepath.Dir(tt.filePath)
+			if dir != tmpDir { // Only check if we created nested directories
+				dirInfo, err := os.Stat(dir)
+				if err != nil {
+					t.Fatalf("Failed to stat directory: %v", err)
+				}
+				dirMode := dirInfo.Mode().Perm()
+				expectedDirMode := os.FileMode(0700)
+				if dirMode != expectedDirMode {
+					t.Errorf("Directory permissions = %o, want %o (owner access only)", dirMode, expectedDirMode)
+				}
+			}
+		})
 	}
 }
