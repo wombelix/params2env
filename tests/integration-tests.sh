@@ -943,6 +943,15 @@ run_cmd "$PARAMS2ENV create --path '/params2env-test/special-chars' --value '$sp
 run_cmd "$PARAMS2ENV read --path '/params2env-test/special-chars' --region '${PRIMARY_REGION}'" \
     "Read parameter with special characters"
 
+# Test empty parameter values (should fail)
+run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/empty-value' --value '' --type 'String' --region '${PRIMARY_REGION}'" \
+    "Create parameter with empty value (should fail)"
+
+# Test very long parameter names (AWS SSM limit is 2048 characters)
+long_param_name="/params2env-test/$(printf 'a%.0s' {1..2000})"
+run_cmd_expect_fail "$PARAMS2ENV create --path '$long_param_name' --value 'test' --type 'String' --region '${PRIMARY_REGION}'" \
+    "Create parameter with very long name (should fail)"
+
 # Cleanup
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
