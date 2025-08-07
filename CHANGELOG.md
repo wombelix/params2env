@@ -1,3 +1,21 @@
+## v0.1.5 (2025-08-07)
+
+### Fix
+
+- remove duplicate setupModifyFlags function
+- improve error handling in getParameterValue
+- require KMS key for SecureString parameters
+- add same region validation for replica operations
+- consistent error handling for replica deletion
+- validate KMS ARN parsing to prevent wrong key usage
+- implement fail-fast for invalid YAML configuration
+- use JSON output for reliable parameter parsing
+
+### Refactor
+
+- reduce test code duplication
+- remove redundant conditional checks
+
 ## v0.1.4 (2025-08-05)
 
 ### Fix
