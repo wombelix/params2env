@@ -4,17 +4,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Exit on error, but ensure we run cleanup first
 set -e
 
-# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 WHITE='\033[1;37m'
 
-# Global variables
 CLEANUP_NEEDED=false
 IAM_RESOURCES_CREATED=false
 KMS_KEYS_CREATED=false
@@ -23,7 +20,6 @@ USE_CUSTOM_KMS=false
 validate_environment() {
     local missing_vars=()
 
-    # Check required environment variables
     if [ -z "${AWS_ACCOUNT_ID}" ]; then
         missing_vars+=("AWS_ACCOUNT_ID")
     elif ! [[ "${AWS_ACCOUNT_ID}" =~ ^[0-9]{12}$ ]]; then
@@ -45,7 +41,6 @@ validate_environment() {
         return 1
     fi
 
-    # Auto-detect AWS_IAM_PRINCIPAL if not set
     if [ -z "${AWS_IAM_PRINCIPAL}" ]; then
         echo -e "${YELLOW}AWS_IAM_PRINCIPAL not set, attempting to detect from current identity...${NC}"
 
@@ -57,7 +52,6 @@ validate_environment() {
 
         echo -e "${YELLOW}Current identity: $current_identity${NC}"
 
-        # Convert assumed role to base role ARN
         if [[ $current_identity =~ ^arn:aws:sts::[0-9]{12}:assumed-role/([^/]+)/ ]]; then
             local role_name="${BASH_REMATCH[1]}"
             local account_id
@@ -76,7 +70,6 @@ validate_environment() {
 
         export AWS_IAM_PRINCIPAL
     else
-        # Validate provided AWS_IAM_PRINCIPAL
         if [[ $AWS_IAM_PRINCIPAL =~ ^arn:aws:sts::[0-9]{12}:assumed-role/([^/]+)/ ]]; then
             local role_name="${BASH_REMATCH[1]}"
             local account_id
@@ -89,7 +82,6 @@ validate_environment() {
         fi
     fi
 
-    # If any other variables are missing, print them and return error
     if [ ${#missing_vars[@]} -ne 0 ]; then
         echo -e "${RED}Error: Missing required environment variables:${NC}"
         for var in "${missing_vars[@]}"; do
@@ -106,12 +98,10 @@ validate_environment() {
     return 0
 }
 
-# Function to clean up SSM parameters in a region
 cleanup_ssm_parameters() {
     local region=$1
     echo -e "${YELLOW}Cleaning up parameters in ${region}...${NC}"
 
-    # Get all parameters under /params2env-test/ path recursively as JSON
     local params_json
     params_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
@@ -121,7 +111,6 @@ cleanup_ssm_parameters() {
         --output json 2>/dev/null)
 
     if [ -n "$params_json" ] && [ "$params_json" != "[]" ]; then
-        # Parse JSON array and process each parameter
         while IFS= read -r param; do
             if [ -n "$param" ]; then
                 echo -n "  - Deleting: $param ... "
@@ -133,7 +122,6 @@ cleanup_ssm_parameters() {
             fi
         done < <(echo "$params_json" | jq -r '.[]')
 
-        # Verify all parameters are deleted
         local remaining_json
         remaining_json=$(aws ssm get-parameters-by-path \
             --path "/params2env-test/" \
@@ -153,12 +141,10 @@ cleanup_ssm_parameters() {
     fi
 }
 
-# Cleanup function to be called on script exit
 cleanup() {
     if [ "$CLEANUP_NEEDED" = true ]; then
         echo -e "\n${YELLOW}Performing cleanup due to script interruption...${NC}"
 
-        # Clean up SSM parameters in both regions
         cleanup_ssm_parameters "${PRIMARY_REGION}"
         cleanup_ssm_parameters "${SECONDARY_REGION}"
 
@@ -170,17 +156,14 @@ cleanup() {
             cleanup_kms || true
         fi
 
-        # Clean up any test files that might have been created
         rm -f ./test-string.env ./test-secure-aws.env ./test-secure-custom.env ./test-config.env .params2env.yaml .params2env.yaml.template || true
 
         echo -e "${GREEN}Cleanup completed${NC}"
     fi
 }
 
-# Set up trap for cleanup on script exit
 trap cleanup EXIT
 
-# Function to check if a variable is set and validate its value
 check_var() {
     local var_name=$1
     local var_value=${!var_name}
@@ -211,7 +194,6 @@ check_var() {
                 fi
                 ;;
             AWS_IAM_PRINCIPAL)
-                # Get current identity
                 local current_identity
                 current_identity=$(aws sts get-caller-identity --query 'Arn' --output text)
 
@@ -225,7 +207,6 @@ check_var() {
                     continue
                 fi
 
-                # Validate ARN format
                 if ! [[ $var_value =~ ^arn:aws:iam::[0-9]{12}:(user|role)/.+ ]]; then
                     echo -e "${RED}Invalid IAM principal ARN format.${NC}"
                     echo -e "${YELLOW}Current identity: $current_identity${NC}"
@@ -236,45 +217,36 @@ check_var() {
                 ;;
         esac
 
-        # If we get here, the value is valid
         break
     done
 
-    # Export the validated value
     export "$var_name"="$var_value"
     echo -e "${GREEN}$var_name has been set to: $var_value${NC}"
 
-    # Ask for confirmation
     read -r -p "Is this value correct? [Y/n] " confirm
     if [[ $confirm =~ ^[Nn]$ ]]; then
         check_var "$var_name" ""
     fi
 }
 
-# Function to prompt for yes/no with default
 prompt_yes_no() {
     local prompt="$1"
     local default="$2"
     local REPLY
 
-    # Print prompt in white (not yellow) and keep cursor on same line
     echo -en "${WHITE}${prompt}${NC} "
     read -r REPLY
 
-    # Convert empty response to default
     if [ -z "$REPLY" ]; then
         REPLY=$default
     fi
 
-    # Convert to lowercase
     echo "$REPLY" | tr '[:upper:]' '[:lower:]'
 }
 
-# Function to check for existing resources
 check_existing_resources() {
     local found_resources=()
 
-    # Check for parameters in primary region
     local primary_json
     primary_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
@@ -292,7 +264,6 @@ check_existing_resources() {
         done < <(echo "$primary_json" | jq -r '.[]')
     fi
 
-    # Check for parameters in secondary region
     local secondary_json
     secondary_json=$(aws ssm get-parameters-by-path \
         --path "/params2env-test/" \
@@ -310,7 +281,6 @@ check_existing_resources() {
         done < <(echo "$secondary_json" | jq -r '.[]')
     fi
 
-    # If resources were found, ask to clean them up
     if [ ${#found_resources[@]} -gt 0 ]; then
         echo -e "\n${YELLOW}Found existing test resources:${NC}"
         printf '%s\n' "${found_resources[@]}"
@@ -321,7 +291,6 @@ check_existing_resources() {
         if [[ "$cleanup_response" =~ ^[Yy]$ ]]; then
             cleanup_existing_resources
 
-            # Verify cleanup was successful
             local remaining_primary
             remaining_primary=$(aws ssm get-parameters-by-path --path "/params2env-test/" --recursive --region "${PRIMARY_REGION}" --query 'Parameters[].Name' --output json 2>/dev/null)
             local remaining_secondary
@@ -335,32 +304,26 @@ check_existing_resources() {
     fi
 }
 
-# Function to clean up existing resources
 cleanup_existing_resources() {
     echo -e "\n${GREEN}Cleaning up existing resources...${NC}"
 
-    # Clean up SSM parameters in both regions
     cleanup_ssm_parameters "${PRIMARY_REGION}"
     cleanup_ssm_parameters "${SECONDARY_REGION}"
 
-    # Clean up IAM policy if it exists
     if aws iam get-policy --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy" >/dev/null 2>&1; then
         echo "Cleaning up IAM policy..."
         cleanup_iam
     fi
 }
 
-# Function to create IAM policy
 create_iam_policy() {
     echo -e "\n${GREEN}=== Creating IAM Policy ===${NC}"
 
-    # Check if policy already exists
     if aws iam get-policy --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy" >/dev/null 2>&1; then
         echo -e "${YELLOW}Policy params2env-test-policy already exists, reusing existing policy${NC}"
         return 0
     fi
 
-    # Create policy document
     local policy_document='{
         "Version": "2012-10-17",
         "Statement": [
@@ -392,7 +355,6 @@ create_iam_policy() {
         ]
     }'
 
-    # Create policy
     if ! aws iam create-policy \
         --policy-name params2env-test-policy \
         --policy-document "$policy_document" --no-cli-pager; then
@@ -403,7 +365,6 @@ create_iam_policy() {
     echo -e "${GREEN}Successfully created IAM policy${NC}"
 }
 
-# Function to print resource information
 # shellcheck disable=SC2120
 print_resource_info() {
     if [ "$#" -gt 0 ]; then
@@ -459,9 +420,7 @@ print_resource_info() {
     fi
 }
 
-# Function to check for existing KMS keys
 check_existing_kms_keys() {
-    # Try to get existing key IDs from environment
     if [ -n "${PRIMARY_KEY_ID}" ] && [ -n "${REPLICA_KEY_ID}" ]; then
         echo "Existing KMS keys found:"
         echo "PRIMARY_KEY_ID: ${PRIMARY_KEY_ID}"
@@ -474,7 +433,6 @@ check_existing_kms_keys() {
         fi
     fi
 
-    # Ask about creating new customer managed keys
     echo -en "${WHITE}Do you want to test with customer managed KMS keys? [y/N] ${NC}"
     read -r create_custom
     if [[ "$create_custom" =~ ^[Yy]$ ]]; then
@@ -494,7 +452,6 @@ check_existing_kms_keys() {
     return 1
 }
 
-# Function to run a command and check its exit status
 run_cmd() {
     local cmd=$1
     local description=$2
@@ -511,15 +468,12 @@ run_cmd() {
     fi
 }
 
-# Function to find the params2env binary
 find_binary() {
     local binary_path
 
-    # Check current directory first
     if [ -x "./params2env" ]; then
         binary_path="./params2env"
     else
-        # Try to find in PATH
         binary_path=$(command -v params2env 2>/dev/null)
     fi
 
@@ -537,19 +491,15 @@ find_binary() {
     echo "$binary_path"
 }
 
-# Function to create IAM role
 create_iam_role() {
     echo -e "\n${GREEN}=== Creating IAM Role ===${NC}"
 
-    # Check if role already exists
     if aws iam get-role --role-name params2env-test-role >/dev/null 2>&1; then
         echo -e "${YELLOW}Role params2env-test-role already exists, reusing existing role${NC}"
         return 0
     fi
 
-    # Create trust policy document with proper JSON escaping
     local trust_policy
-    # Convert SSO role ARN to proper format if needed
     local formatted_principal="$AWS_IAM_PRINCIPAL"
     if [[ "$AWS_IAM_PRINCIPAL" =~ ^arn:aws:iam::[0-9]{12}:role/AWSReservedSSO_ ]]; then
         formatted_principal="arn:aws:iam::${AWS_ACCOUNT_ID}:root"
@@ -568,7 +518,6 @@ create_iam_role() {
             }]
         }')
 
-    # Create role
     if ! aws iam create-role \
         --role-name params2env-test-role \
         --assume-role-policy-document "$trust_policy" --no-cli-pager; then
@@ -576,7 +525,6 @@ create_iam_role() {
         exit 1
     fi
 
-    # Attach policy to role
     if ! aws iam attach-role-policy \
         --role-name params2env-test-role \
         --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy" --no-cli-pager; then
@@ -587,50 +535,39 @@ create_iam_role() {
     echo -e "${GREEN}Successfully created IAM role${NC}"
 }
 
-# Function to clean up IAM resources
 cleanup_iam() {
     echo -e "${YELLOW}Cleaning up IAM resources...${NC}"
 
-    # Detach policy from role
     aws iam detach-role-policy \
         --role-name params2env-test-role \
         --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy" 2>/dev/null || true
 
-    # Delete role
     aws iam delete-role \
         --role-name params2env-test-role 2>/dev/null || true
 
-    # Delete policy versions
     policy_arn="arn:aws:iam::${AWS_ACCOUNT_ID}:policy/params2env-test-policy"
     versions=$(aws iam list-policy-versions --policy-arn "$policy_arn" --query 'Versions[?!IsDefaultVersion].VersionId' --output text 2>/dev/null || echo "")
     for version in $versions; do
         aws iam delete-policy-version --policy-arn "$policy_arn" --version-id "$version" 2>/dev/null || true
     done
 
-    # Delete policy
     aws iam delete-policy \
         --policy-arn "$policy_arn" 2>/dev/null || true
 }
 
-# Function to clean up KMS resources in a region
 cleanup_kms() {
     local region=$1
     echo -e "${YELLOW}Cleaning up KMS resources in $region...${NC}"
 
-    # Get key ID from alias
     local key_id
     key_id=$(aws kms list-aliases --region "$region" --query "Aliases[?AliasName=='alias/params2env-test'].TargetKeyId" --output text)
 
     if [ -n "$key_id" ]; then
-        # Delete alias
         aws kms delete-alias --alias-name alias/params2env-test --region "$region" || true
-
-        # Schedule key deletion
         aws kms schedule-key-deletion --key-id "$key_id" --pending-window-in-days 7 --region "$region" || true
     fi
 }
 
-# Function to configure KMS settings
 # shellcheck disable=SC2120
 configure_kms() {
     if [ "$#" -gt 0 ]; then
@@ -644,13 +581,11 @@ configure_kms() {
 
     if [[ $use_custom_kms_response =~ ^[Yy]$ ]]; then
         USE_CUSTOM_KMS=true
-        # Check if KMS key IDs are already set
         if [ -n "${PRIMARY_KEY_ID:-}" ] && [ -n "${REPLICA_KEY_ID:-}" ]; then
             echo -e "\n${YELLOW}Existing KMS keys found:${NC}"
             echo "PRIMARY_KEY_ID: $PRIMARY_KEY_ID"
             echo "REPLICA_KEY_ID: $REPLICA_KEY_ID"
 
-            # Validate existing keys
             if ! aws kms describe-key --key-id "$PRIMARY_KEY_ID" --region "$PRIMARY_REGION" >/dev/null 2>&1; then
                 echo -e "${RED}Primary KMS key not found or not accessible${NC}"
                 unset PRIMARY_KEY_ID
@@ -687,14 +622,12 @@ configure_kms() {
     fi
 }
 
-# Function to get KMS configuration
 get_kms_config() {
     local config_file=$1
     cat "$config_file"
     rm -f "$config_file"
 }
 
-# Function to validate IAM principal
 validate_iam_principal() {
     local principal=$1
     local current_identity
@@ -704,7 +637,6 @@ validate_iam_principal() {
     echo -e "${YELLOW}Current AWS identity: $current_identity${NC}"
 
     if [[ $current_identity =~ assumed-role/.*/.* ]]; then
-        # Extract account ID and role name from assumed role
         local account_id role_name
         account_id=$(echo "$current_identity" | cut -d: -f5)
         role_name=$(echo "$current_identity" | sed -n 's/.*assumed-role\/\([^/]*\)\/.*/\1/p')
@@ -717,13 +649,11 @@ validate_iam_principal() {
         read -r -p "Please enter the correct IAM principal ARN: " principal
     fi
 
-    # Validate ARN format
     if ! [[ $principal =~ ^arn:aws:iam::[0-9]{12}:(user|role)/.+ ]]; then
         echo -e "${RED}Invalid IAM principal ARN format.${NC}"
         return 1
     fi
 
-    # Validate principal exists
     if ! aws iam get-role --role-name "${principal#arn:aws:iam::*:role/}" >/dev/null 2>&1 && \
        ! aws iam get-user --user-name "${principal#arn:aws:iam::*:user/}" >/dev/null 2>&1; then
         echo -e "${RED}IAM principal does not exist or is not accessible${NC}"
@@ -734,45 +664,32 @@ validate_iam_principal() {
     return 0
 }
 
-# Main script execution
 echo -e "\n${GREEN}=== params2env Integration Tests ===${NC}\n"
 
-# Find params2env binary first
 PARAMS2ENV=$(find_binary) || exit 1
 echo -e "${GREEN}Using params2env binary: $PARAMS2ENV${NC}"
 
-# Validate environment variables
 validate_environment
-
-# Check for existing resources
 check_existing_resources
 
-# Configure KMS settings
 # shellcheck disable=SC2119
 configure_kms
 
-# Print detailed resource information and get confirmation
 # shellcheck disable=SC2119
 print_resource_info
 
-# Set cleanup flag
 CLEANUP_NEEDED=true
 
-# Create IAM resources
 create_iam_policy
 create_iam_role
 
-# Mark IAM resources as created
 IAM_RESOURCES_CREATED=true
 
-# Wait for role to be ready
 echo -e "${YELLOW}Waiting for IAM role to be ready...${NC}"
 sleep 10
 
-# Create test configuration
 echo -e "\n${GREEN}=== Creating Test Configuration ===${NC}"
 
-# Create configuration with proper resource tagging
 cat > .params2env.yaml.template << EOF
 region: ${PRIMARY_REGION}
 replica: ${SECONDARY_REGION}
@@ -796,17 +713,14 @@ EOF
 
 envsubst < .params2env.yaml.template > .params2env.yaml
 
-# Test String Parameters
 echo -e "\n${GREEN}=== Testing String Parameters ===${NC}"
 
-# Test with role
 run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
     "Create String parameter (with role)"
 
 run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
     "Read String parameter (with role)"
 
-# Test without role
 run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param-no-role' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Create String parameter (without role)"
 
@@ -825,7 +739,6 @@ run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --file './test-
 run_cmd "$PARAMS2ENV modify --path '/params2env-test/string-param' --value 'test-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Modify String parameter"
 
-# Test SecureString Parameters with AWS Managed Key
 echo -e "\n${GREEN}=== Testing SecureString Parameters (AWS Managed Key) ===${NC}"
 
 run_cmd "$PARAMS2ENV create --path '/params2env-test/secure-param-aws' --value 'secure-value-1' --type 'SecureString' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
@@ -840,7 +753,6 @@ run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-aws' --file './t
 run_cmd "$PARAMS2ENV modify --path '/params2env-test/secure-param-aws' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Modify SecureString parameter"
 
-# Test SecureString Parameters with Customer Managed Key (if enabled)
 if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
     echo -e "\n${GREEN}=== Testing SecureString Parameters (Customer Managed Key) ===${NC}"
 
@@ -857,7 +769,6 @@ if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
         "Modify SecureString parameter"
 fi
 
-# Test Configuration File
 echo -e "\n${GREEN}=== Testing Configuration File ===${NC}"
 
 run_cmd "$PARAMS2ENV create --path '/params2env-test/param1' --value 'config-value-1' --type 'String'" \
@@ -878,7 +789,6 @@ run_cmd "$PARAMS2ENV modify --path '/params2env-test/param1' --value 'config-val
 run_cmd "$PARAMS2ENV modify --path '/params2env-test/param2' --value 'config-value-2-modified'" \
     "Modify second parameter"
 
-# Function to test expected failures
 run_cmd_expect_fail() {
     local cmd=$1
     local description=$2
@@ -895,7 +805,6 @@ run_cmd_expect_fail() {
     fi
 }
 
-# Test Error Scenarios
 echo -e "\n${GREEN}=== Testing Error Scenarios ===${NC}"
 
 run_cmd_expect_fail "$PARAMS2ENV read --path '/params2env-test/nonexistent-param' --region '${PRIMARY_REGION}'" \
@@ -910,19 +819,16 @@ run_cmd_expect_fail "$PARAMS2ENV delete --path '/params2env-test/nonexistent-par
 run_cmd_expect_fail "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/nonexistent-role'" \
     "Read with invalid IAM role (should fail)"
 
-# Test parameter value size limits (AWS SSM limit is 4KB for String, 8KB for SecureString)
 echo -n "Testing parameter value size limit (should fail): "
 echo "Creating parameter with >4KB value"
-large_value=$(printf 'A%.0s' {1..5000})  # 5KB value, exceeds 4KB limit
+large_value=$(printf 'A%.0s' {1..5000})
 if $PARAMS2ENV create --path '/params2env-test/large-param' --value "$large_value" --type 'String' --region "${PRIMARY_REGION}" >/dev/null 2>&1; then
     echo -e "${RED}✗ Failed - should have failed but succeeded${NC}"
-    # Clean up if it somehow succeeded
     $PARAMS2ENV delete --path '/params2env-test/large-param' --region "${PRIMARY_REGION}" >/dev/null 2>&1 || true
 else
     echo -e "${GREEN}✓ Success - correctly failed as expected${NC}"
 fi
 
-# Test invalid parameter path formats
 run_cmd_expect_fail "$PARAMS2ENV create --path 'invalid-path-no-slash' --value 'test' --type 'String' --region '${PRIMARY_REGION}'" \
     "Create parameter with invalid path format (should fail)"
 
@@ -935,7 +841,6 @@ run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-kms-tes
 run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/invalid-region-test' --value 'test' --type 'String' --region 'invalid-region-123'" \
     "Create parameter with invalid region (should fail)"
 
-# Test special characters in parameter values
 special_chars_value='value with special chars: !@#$%^&*(){}[]|\:;"<>?,./'
 run_cmd "$PARAMS2ENV create --path '/params2env-test/special-chars' --value '$special_chars_value' --type 'String' --region '${PRIMARY_REGION}'" \
     "Create parameter with special characters"
@@ -943,19 +848,15 @@ run_cmd "$PARAMS2ENV create --path '/params2env-test/special-chars' --value '$sp
 run_cmd "$PARAMS2ENV read --path '/params2env-test/special-chars' --region '${PRIMARY_REGION}'" \
     "Read parameter with special characters"
 
-# Test empty parameter values (should fail)
 run_cmd_expect_fail "$PARAMS2ENV create --path '/params2env-test/empty-value' --value '' --type 'String' --region '${PRIMARY_REGION}'" \
     "Create parameter with empty value (should fail)"
 
-# Test very long parameter names (AWS SSM limit is 2048 characters)
 long_param_name="/params2env-test/$(printf 'a%.0s' {1..2000})"
 run_cmd_expect_fail "$PARAMS2ENV create --path '$long_param_name' --value 'test' --type 'String' --region '${PRIMARY_REGION}'" \
     "Create parameter with very long name (should fail)"
 
-# Cleanup
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
-# Delete parameters
 echo -e "${YELLOW}Cleaning up SSM parameters...${NC}"
 for param in "/params2env-test/string-param" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/param1" "/params2env-test/param2" "/params2env-test/special-chars"; do
     run_cmd "$PARAMS2ENV delete --path '$param' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
@@ -967,11 +868,9 @@ if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
         "Delete SecureString parameter (custom key)" || true
 fi
 
-# Delete test files
 echo -e "\n${YELLOW}Cleaning up test files...${NC}"
 rm -f ./test-string.env ./test-secure-aws.env ./test-secure-custom.env ./test-config.env .params2env.yaml .params2env.yaml.template
 
-# Schedule KMS key deletion if custom keys were created
 if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]] && [ "$KMS_KEYS_CREATED" = true ]; then
     echo -e "\n${YELLOW}Do you want to schedule KMS keys for deletion? [y/N]${NC}"
     echo -e "${RED}Warning: Keys will be scheduled for deletion in 7 days${NC}"
@@ -987,7 +886,6 @@ if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]] && [ "$KMS_KEYS_CREATED" = true ]; then
     fi
 fi
 
-# Cleanup IAM resources
 cleanup_iam
 
 echo -e "\n${GREEN}Integration tests completed!${NC}"

@@ -211,7 +211,6 @@ func TestRunRead(t *testing.T) {
 			testRoot := &cobra.Command{Use: "params2env"}
 			setupReadFlags(t, testRoot)
 
-			// Capture stdout
 			oldStdout := os.Stdout
 			r, w, _ := os.Pipe()
 			os.Stdout = w
@@ -254,7 +253,6 @@ func TestRunReadWithConfig(t *testing.T) {
 	rts := setupReadTest(t)
 	defer rts.cleanup()
 
-	// Override mock client for config test
 	mockClient := &aws.MockSSMClient{
 		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
 			value := "test-value-" + *input.Name
@@ -269,7 +267,6 @@ func TestRunReadWithConfig(t *testing.T) {
 		return &aws.Client{SSMClient: mockClient}, nil
 	}
 
-	// Create config file
 	configContent := []byte(`
 region: eu-central-1
 role: arn:aws:iam::123:role/test
@@ -369,14 +366,12 @@ params:
 }
 
 func TestRunReadWithInvalidConfig(t *testing.T) {
-	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "params2env-test-invalid-config")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	// Save and restore environment
 	origHome := os.Getenv("HOME")
 	origRegion := os.Getenv("AWS_REGION")
 	defer func() {
@@ -386,7 +381,6 @@ func TestRunReadWithInvalidConfig(t *testing.T) {
 	_ = os.Setenv("HOME", tmpDir)
 	_ = os.Setenv("AWS_REGION", "eu-central-1")
 
-	// Create invalid config file
 	invalidConfigContent := []byte(`
 region: [invalid yaml
 params:
@@ -396,10 +390,7 @@ params:
 		t.Fatalf("Failed to write invalid config file: %v", err)
 	}
 
-	// Create a test root command
 	testRoot := &cobra.Command{Use: "params2env"}
-
-	// Reset flags
 	readCmd.ResetFlags()
 	readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
 	readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
@@ -408,24 +399,17 @@ params:
 	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
-
-	// Add read command to test root
 	testRoot.AddCommand(readCmd)
 
-	// Execute command - should fail due to invalid config
 	testRoot.SetArgs([]string{"read", "--path", "/test/param"})
 	err = testRoot.Execute()
 
-	// Should fail with config error
 	if err == nil {
 		t.Error("Expected error due to invalid YAML config, but got none")
 	}
 }
 
-// TestErrorMessageFormatting tests the error message formatting logic in getParameterValue
-// to ensure proper context enrichment and actionable guidance without AWS mocking.
 func TestErrorMessageFormatting(t *testing.T) {
-	// Save original NewClient and restore after tests
 	origNewClient := aws.NewClient
 	defer func() { aws.NewClient = origNewClient }()
 
@@ -468,7 +452,6 @@ func TestErrorMessageFormatting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock AWS client to return specific error
 			aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 				return &aws.Client{SSMClient: &aws.MockSSMClient{
 					GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
@@ -477,16 +460,13 @@ func TestErrorMessageFormatting(t *testing.T) {
 				}}, nil
 			}
 
-			// Test getParameterValue function directly
 			_, err := getParameterValue(tt.paramName, tt.region, "")
 
-			// Verify error occurred
 			if err == nil {
 				t.Errorf("getParameterValue() expected error but got none")
 				return
 			}
 
-			// Verify error message formatting
 			if !containsString(err.Error(), tt.expectedFormat) {
 				t.Errorf("getParameterValue() error = %q, expected to contain %q", err.Error(), tt.expectedFormat)
 			}
@@ -494,9 +474,6 @@ func TestErrorMessageFormatting(t *testing.T) {
 	}
 }
 
-// TestSecureFilePermissions verifies that files and directories created by writeOutput
-// have secure permissions to prevent unauthorized access to sensitive SSM parameter values.
-// Directories are created with 0700 (owner access only) and files with 0600 (owner read/write only).
 func TestSecureFilePermissions(t *testing.T) {
 	tmpDir := t.TempDir() // Automatically cleaned up
 
@@ -516,22 +493,18 @@ func TestSecureFilePermissions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test data
 			output := "export TEST_PARAM=\"secret-value\"\n"
 			params := []config.ParamConfig{{Name: "/test/param"}}
 
-			// Set readFile to test path
 			origReadFile := readFile
 			readFile = tt.filePath
 			defer func() { readFile = origReadFile }()
 
-			// Call writeOutput to create file with secure permissions
 			err := writeOutput(output, params, nil)
 			if err != nil {
 				t.Fatalf("writeOutput failed: %v", err)
 			}
 
-			// Verify file was created and has correct content
 			content, err := os.ReadFile(tt.filePath)
 			if err != nil {
 				t.Fatalf("Failed to read created file: %v", err)
@@ -540,7 +513,6 @@ func TestSecureFilePermissions(t *testing.T) {
 				t.Errorf("File content = %q, want %q", string(content), output)
 			}
 
-			// Verify file permissions are secure (0600 - owner read/write only)
 			fileInfo, err := os.Stat(tt.filePath)
 			if err != nil {
 				t.Fatalf("Failed to stat file: %v", err)
@@ -551,9 +523,8 @@ func TestSecureFilePermissions(t *testing.T) {
 				t.Errorf("File permissions = %o, want %o (owner read/write only)", fileMode, expectedFileMode)
 			}
 
-			// Verify directory permissions are secure (0700 - owner access only)
 			dir := filepath.Dir(tt.filePath)
-			if dir != tmpDir { // Only check if we created nested directories
+			if dir != tmpDir {
 				dirInfo, err := os.Stat(dir)
 				if err != nil {
 					t.Fatalf("Failed to stat directory: %v", err)
