@@ -178,6 +178,10 @@ func ensureReadRegionIsSet() error {
 		if readRegion = os.Getenv("AWS_REGION"); readRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
+		// Validate region from environment variable
+		if err := validation.ValidateRegion(readRegion); err != nil {
+			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
+		}
 	}
 	return nil
 }
@@ -190,6 +194,12 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 	}
 	if region == "" {
 		region = os.Getenv("AWS_REGION")
+		// Validate region from environment variable
+		if region != "" {
+			if err := validation.ValidateRegion(region); err != nil {
+				return "", fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
+			}
+		}
 	}
 	if region == "" {
 		return "", fmt.Errorf("AWS region must be specified via config, --region, or AWS_REGION environment variable")

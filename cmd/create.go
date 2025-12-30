@@ -175,6 +175,10 @@ func ensureRegionIsSet() error {
 		if createRegion = os.Getenv("AWS_REGION"); createRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
+		// Validate region from environment variable
+		if err := validation.ValidateRegion(createRegion); err != nil {
+			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
+		}
 	}
 	return nil
 }

@@ -206,6 +206,8 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 }
 
 // ModifyParameter updates an existing parameter in SSM Parameter Store.
+// It first verifies the parameter exists before attempting to modify it,
+// preventing accidental creation of new parameters.
 //
 // Parameters:
 //   - ctx: Context for the AWS API call
@@ -226,6 +228,13 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 		return ErrEmptyValue
 	}
 
+	// Verify parameter exists before modifying to prevent accidental creation.
+	// PutParameter with Overwrite=true would create a new parameter if it doesn't exist.
+	_, err := c.GetParameter(ctx, name)
+	if err != nil {
+		return err
+	}
+
 	allowOverwrite := true
 	input := &ssm.PutParameterInput{
 		Name:      &name,
@@ -239,10 +248,6 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 
 	output, err := c.SSMClient.PutParameter(ctx, input)
 	if err != nil {
-		var pnf *ssmtypes.ParameterNotFound
-		if errors.As(err, &pnf) {
-			return fmt.Errorf("%w: %s", ErrNotFound, name)
-		}
 		var ae smithy.APIError
 		if errors.As(err, &ae) {
 			if ae.ErrorCode() == "AccessDeniedException" {

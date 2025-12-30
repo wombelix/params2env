@@ -132,6 +132,10 @@ func ensureDeleteRegionIsSet() error {
 		if deleteRegion = os.Getenv("AWS_REGION"); deleteRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
+		// Validate region from environment variable
+		if err := validation.ValidateRegion(deleteRegion); err != nil {
+			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
+		}
 	}
 	return nil
 }

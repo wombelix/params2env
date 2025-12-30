@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -202,6 +203,74 @@ role: arn:aws:iam::123456789012:role/test
 				t.Errorf("runCreate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestInvalidAWSRegionEnvVar tests that invalid AWS_REGION environment variable
+// values are properly validated and rejected with a clear error message.
+func TestInvalidAWSRegionEnvVar(t *testing.T) {
+	// Save original environment and flag values
+	origRegion := os.Getenv("AWS_REGION")
+	origHome := os.Getenv("HOME")
+	origNewClient := aws.NewClient
+	origCreateRegion := createRegion
+
+	// Create temp dir for HOME to avoid loading real config
+	tmpDir, err := os.MkdirTemp("", "params2env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	// Cleanup must restore everything
+	defer func() {
+		_ = os.Setenv("AWS_REGION", origRegion)
+		_ = os.Setenv("HOME", origHome)
+		aws.NewClient = origNewClient
+		createRegion = origCreateRegion
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME: %v", err)
+	}
+
+	// Set invalid AWS_REGION
+	if err := os.Setenv("AWS_REGION", "invalid-region-format"); err != nil {
+		t.Fatalf("Failed to set AWS_REGION: %v", err)
+	}
+
+	// Setup mock client (shouldn't be called since validation fails first)
+	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+		return &aws.Client{SSMClient: &aws.MockSSMClient{}}, nil
+	}
+
+	// Setup flags
+	setupCreateFlags()
+
+	// Reset flag values to ensure region comes from env var
+	createRegion = ""
+	createPath = "/test/param"
+	createValue = "test-value"
+	createType = "String"
+
+	// Call ensureRegionIsSet which should validate AWS_REGION
+	err = ensureRegionIsSet()
+
+	if err == nil {
+		t.Error("ensureRegionIsSet() should return error for invalid AWS_REGION")
+		return
+	}
+
+	// Verify the error message contains both the wrapper and the underlying validation error
+	errMsg := err.Error()
+	if !containsString(errMsg, "invalid AWS_REGION") {
+		t.Errorf("ensureRegionIsSet() error = %q, want error containing 'invalid AWS_REGION'", errMsg)
+	}
+	if !containsString(errMsg, "invalid region format") {
+		t.Errorf("ensureRegionIsSet() error = %q, want error containing 'invalid region format'", errMsg)
+	}
+	if !containsString(errMsg, "invalid-region-format") {
+		t.Errorf("ensureRegionIsSet() error = %q, want error containing the actual invalid value 'invalid-region-format'", errMsg)
 	}
 }
 
