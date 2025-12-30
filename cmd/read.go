@@ -18,25 +18,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Command-line flags for the read command
 var (
-	// readPath is the full path of the parameter to read
-	readPath string
-	// readRegion is the AWS region where the parameter will be read from
-	readRegion string
-	// readRole is the AWS IAM role to assume for the operation
-	readRole string
-	// readFile is the path to write the parameter value to
-	readFile string
-	// readUpper determines if the environment variable name should be uppercase
-	readUpper bool
-	// readPrefix is prepended to the environment variable name
-	readPrefix string
-	// readEnvName overrides the default environment variable name
+	readPath    string
+	readRegion  string
+	readRole    string
+	readFile    string
+	readUpper   bool
+	readPrefix  string
 	readEnvName string
 )
 
-// readCmd represents the read command
 var readCmd = &cobra.Command{
 	Use:   "read",
 	Short: "Read a parameter from SSM Parameter Store",
@@ -61,15 +52,12 @@ Examples:
 	RunE:    runRead,
 }
 
-// validateReadFlags checks if all required flags are set and valid
 func validateReadFlags(cmd *cobra.Command, args []string) error {
-	// Load config to check if parameters are defined
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Path is required only if no parameters are defined in config
 	if readPath == "" && (cfg == nil || len(cfg.Params) == 0) {
 		return fmt.Errorf("required flag \"path\" not set")
 	}
@@ -91,34 +79,27 @@ func validateReadFlags(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runRead executes the read command
 func runRead(cmd *cobra.Command, args []string) error {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// If path is not set but we have params in config, use those
 	if readPath == "" && cfg != nil && len(cfg.Params) > 0 {
 		return handleConfigParameters(cfg)
 	}
 
-	// Handle single parameter case
 	return handleSingleParameter(cfg)
 }
 
-// handleConfigParameters processes parameters defined in the configuration
 func handleConfigParameters(cfg *config.Config) error {
 	var outputs []string
 	for _, param := range cfg.Params {
-		// Get parameter value
 		value, err := getParameterValue(param.Name, param.Region, cfg.Region)
 		if err != nil {
 			return err
 		}
 
-		// Format the output
 		name := formatEnvName(param.Name, param.Env, cfg)
 		outputs = append(outputs, fmt.Sprintf("export %s=%q", name, value))
 	}
@@ -127,30 +108,24 @@ func handleConfigParameters(cfg *config.Config) error {
 	return writeOutput(output, cfg.Params, cfg)
 }
 
-// handleSingleParameter processes a single parameter specified via command line
 func handleSingleParameter(cfg *config.Config) error {
-	// Merge config with flags (flags take precedence)
 	mergeReadConfig(cfg)
 
-	// Ensure region is set
 	if err := ensureReadRegionIsSet(); err != nil {
 		return err
 	}
 
-	// Get parameter value
 	value, err := getParameterValue(readPath, readRegion, "")
 	if err != nil {
 		return err
 	}
 
-	// Format the output
 	name := formatEnvName(readPath, readEnvName, cfg)
 	output := fmt.Sprintf("export %s=%q\n", name, value)
 
 	return writeOutput(output, []config.ParamConfig{{Name: readPath}}, cfg)
 }
 
-// mergeReadConfig merges configuration from file with command line flags
 func mergeReadConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
@@ -172,13 +147,11 @@ func mergeReadConfig(cfg *config.Config) {
 	}
 }
 
-// ensureReadRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureReadRegionIsSet() error {
 	if readRegion == "" {
 		if readRegion = os.Getenv("AWS_REGION"); readRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
-		// Validate region from environment variable
 		if err := validation.ValidateRegion(readRegion); err != nil {
 			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
 		}
@@ -186,7 +159,6 @@ func ensureReadRegionIsSet() error {
 	return nil
 }
 
-// getParameterValue retrieves a parameter value from SSM Parameter Store
 func getParameterValue(paramName, paramRegion, defaultRegion string) (string, error) {
 	region := paramRegion
 	if region == "" {
@@ -194,7 +166,6 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 	}
 	if region == "" {
 		region = os.Getenv("AWS_REGION")
-		// Validate region from environment variable
 		if region != "" {
 			if err := validation.ValidateRegion(region); err != nil {
 				return "", fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
@@ -219,7 +190,6 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 		if errors.Is(err, aws.ErrNoAccess) {
 			return "", fmt.Errorf("access denied to parameter '%s' in region '%s': check IAM permissions", paramName, region)
 		}
-		// Check for throttling errors by examining error message
 		if strings.Contains(err.Error(), "throttl") {
 			return "", fmt.Errorf("request throttled for parameter '%s' in region '%s': try again later", paramName, region)
 		}
@@ -229,7 +199,6 @@ func getParameterValue(paramName, paramRegion, defaultRegion string) (string, er
 	return value, nil
 }
 
-// formatEnvName formats the environment variable name according to configuration
 func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 	name := envName
 	if name == "" {
@@ -249,31 +218,22 @@ func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 	return name
 }
 
-// writeOutput writes the parameter value(s) to a file or stdout.
-// When writing to files, secure permissions are used to protect sensitive SSM parameter values:
-// - Directories: 0700 (owner access only) to prevent unauthorized directory traversal
-// - Files: 0600 (owner read/write only) to prevent unauthorized access to secrets
+// Writes to file or stdout. Uses secure permissions (0700 dirs, 0600 files).
 func writeOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
 	if readFile == "" && cfg != nil {
 		readFile = cfg.File
 	}
 
 	if readFile != "" {
-		// Ensure directory exists with secure permissions (0700 - owner access only)
-		// This prevents other users from accessing the directory containing sensitive parameter files
 		dir := filepath.Dir(readFile)
-		// Ensure directory exists with secure permissions (0700 = owner full access only)
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 
-		// Print reading messages for each parameter
 		for _, param := range params {
 			fmt.Printf("Reading parameter '%s' from region '%s'\n", param.Name, readRegion)
 		}
 
-		// Write to file with secure permissions (0600 - owner read/write only)
-		// This prevents other users from reading sensitive SSM parameter values
 		if err := os.WriteFile(readFile, []byte(output), 0600); err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}

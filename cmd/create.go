@@ -17,29 +17,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Command-line flags for the create command
 var (
-	// createPath is the full path of the parameter to create
-	createPath string
-	// createValue is the value to assign to the parameter
-	createValue string
-	// createType is the parameter type (String or SecureString)
-	createType string
-	// createDesc is an optional description for the parameter
-	createDesc string
-	// createKMS is the KMS key ID for SecureString parameters
-	createKMS string
-	// createRegion is the AWS region where the parameter will be created
-	createRegion string
-	// createRole is the AWS IAM role to assume for the operation
-	createRole string
-	// createReplica is the region where the parameter should be replicated
-	createReplica string
-	// createOverwrite determines if an existing parameter should be overwritten
+	createPath      string
+	createValue     string
+	createType      string
+	createDesc      string
+	createKMS       string
+	createRegion    string
+	createRole      string
+	createReplica   string
 	createOverwrite bool
 )
 
-// createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new parameter in SSM Parameter Store",
@@ -61,7 +50,6 @@ Examples:
 	RunE:    runCreate,
 }
 
-// validateCreateFlags checks if all required flags are set and valid
 func validateCreateFlags(cmd *cobra.Command, args []string) error {
 	if createPath == "" {
 		return fmt.Errorf("required flag \"path\" not set")
@@ -93,43 +81,34 @@ func validateCreateFlags(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runCreate executes the create command
 func runCreate(cmd *cobra.Command, args []string) error {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Merge config with flags (flags take precedence)
 	mergeCreateConfig(cfg)
 
-	// Validate parameter type
 	if err := validateParameterType(); err != nil {
 		return err
 	}
 
-	// Ensure region is set
 	if err := ensureRegionIsSet(); err != nil {
 		return err
 	}
 
-	// Validate regions are different
 	if err := validation.ValidateRegions(createRegion, createReplica); err != nil {
 		return err
 	}
 
-	// Validate SecureString requirements
 	if err := validation.ValidateSecureStringRequirements(createType, createKMS); err != nil {
 		return err
 	}
 
-	// Create parameter in primary region
 	if err := createInPrimaryRegion(); err != nil {
 		return err
 	}
 
-	// Handle replication if specified
 	if createReplica != "" {
 		if err := createInReplicaRegion(); err != nil {
 			return err
@@ -139,7 +118,6 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// mergeCreateConfig merges configuration from file with command line flags
 func mergeCreateConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
@@ -158,7 +136,6 @@ func mergeCreateConfig(cfg *config.Config) {
 	}
 }
 
-// validateParameterType ensures the parameter type is valid
 func validateParameterType() error {
 	paramTypeStr := strings.TrimSpace(createType)
 	if paramTypeStr != aws.ParameterTypeString && paramTypeStr != aws.ParameterTypeSecureString {
@@ -169,13 +146,11 @@ func validateParameterType() error {
 	return nil
 }
 
-// ensureRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureRegionIsSet() error {
 	if createRegion == "" {
 		if createRegion = os.Getenv("AWS_REGION"); createRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
-		// Validate region from environment variable
 		if err := validation.ValidateRegion(createRegion); err != nil {
 			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
 		}
@@ -183,7 +158,6 @@ func ensureRegionIsSet() error {
 	return nil
 }
 
-// createInPrimaryRegion creates the parameter in the primary region
 func createInPrimaryRegion() error {
 	ctx := context.Background()
 	client, err := aws.NewClient(ctx, createRegion, createRole)
@@ -204,7 +178,6 @@ func createInPrimaryRegion() error {
 	return nil
 }
 
-// createInReplicaRegion creates the parameter in the replica region
 func createInReplicaRegion() error {
 	ctx := context.Background()
 	replicaClient, err := aws.NewClient(ctx, createReplica, createRole)
@@ -229,17 +202,13 @@ func createInReplicaRegion() error {
 	return nil
 }
 
-// getReplicaKMSKeyID returns the KMS key ID for the replica region with proper ARN validation.
-// For KMS key aliases or key IDs, returns the input unchanged.
-// For KMS ARNs, validates the format and constructs a new ARN for the replica region.
+// For aliases or key IDs, returns input unchanged.
+// For ARNs, builds a new ARN for the replica region.
 func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) (*string, error) {
-	// Check if it looks like an ARN (starts with "arn:")
 	if !strings.HasPrefix(kmsKeyID, "arn:") {
-		// Not an ARN, treat as alias or key ID
 		return &kmsKeyID, nil
 	}
 
-	// Parse ARN with validation
 	arnParts := strings.Split(kmsKeyID, ":")
 	if len(arnParts) != 6 {
 		return nil, fmt.Errorf("invalid KMS ARN format: %s", kmsKeyID)

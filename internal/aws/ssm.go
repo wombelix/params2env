@@ -2,21 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package aws provides AWS service interactions for the params2env tool.
-//
-// It implements a clean interface for AWS Systems Manager Parameter Store operations,
-// supporting parameter creation, retrieval, modification, and deletion. The package
-// handles AWS authentication, including role assumption, and provides proper error
-// handling and context support.
-//
-// Example usage:
-//
-//	ctx := context.Background()
-//	client, err := aws.NewClient(ctx, "us-west-2", "")
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	value, err := client.GetParameter(ctx, "/my/parameter")
+// Package aws wraps AWS SSM Parameter Store operations.
 package aws
 
 import (
@@ -33,7 +19,6 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// Common errors returned by the package
 var (
 	ErrEmptyRegion     = errors.New("region is required")
 	ErrEmptyName       = errors.New("parameter name is required")
@@ -44,35 +29,24 @@ var (
 	ErrNotFound        = errors.New("parameter not found")
 )
 
-// Valid parameter types as defined by AWS SSM
 const (
 	ParameterTypeString       = "String"
 	ParameterTypeSecureString = "SecureString"
 )
 
-// SSMAPI defines the interface for AWS SSM operations.
-// This interface allows for easy mocking in tests and flexibility
-// in implementation.
 type SSMAPI interface {
 	GetParameter(ctx context.Context, params *ssm.GetParameterInput, optFns ...func(*ssm.Options)) (*ssm.GetParameterOutput, error)
 	PutParameter(ctx context.Context, params *ssm.PutParameterInput, optFns ...func(*ssm.Options)) (*ssm.PutParameterOutput, error)
 	DeleteParameter(ctx context.Context, params *ssm.DeleteParameterInput, optFns ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)
 }
 
-// Client represents an AWS SSM client with the necessary API operations.
-// It wraps the AWS SDK's SSM client and provides a simpler interface
-// for parameter store operations.
 type Client struct {
 	SSMClient SSMAPI
 }
 
-// NewClientFunc is the type for the client creation function.
-// This allows for dependency injection and easier testing.
 type NewClientFunc func(context.Context, string, string) (*Client, error)
 
-// DefaultNewClient is the default implementation of NewClientFunc.
-// It creates a new AWS SSM client with the specified region and optional role.
-// If role is provided, it will use AWS STS to assume the role before creating the client.
+// Creates SSM client. If role is provided, assumes it via STS first.
 var DefaultNewClient NewClientFunc = func(ctx context.Context, region, role string) (*Client, error) {
 	if region == "" {
 		return nil, ErrEmptyRegion
@@ -84,7 +58,6 @@ var DefaultNewClient NewClientFunc = func(ctx context.Context, region, role stri
 	}
 
 	if role != "" {
-		// Create an STS client to assume the role
 		stsClient := sts.NewFromConfig(cfg)
 		provider := stscreds.NewAssumeRoleProvider(stsClient, role)
 		cfg.Credentials = aws.NewCredentialsCache(provider)
@@ -95,22 +68,8 @@ var DefaultNewClient NewClientFunc = func(ctx context.Context, region, role stri
 	}, nil
 }
 
-// NewClient is the function used to create new AWS SSM clients.
-// By default, it points to DefaultNewClient but can be overridden for testing.
-var NewClient = DefaultNewClient
+var NewClient = DefaultNewClient // override for tests
 
-// GetParameter retrieves a parameter from SSM Parameter Store.
-// It automatically handles decryption for SecureString parameters.
-//
-// Parameters:
-//   - ctx: Context for the AWS API call
-//   - name: The full path of the parameter to retrieve
-//
-// Returns:
-//   - The parameter value as a string
-//   - ErrEmptyName if name is empty
-//   - ErrNotFound if the parameter doesn't exist
-//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) GetParameter(ctx context.Context, name string) (string, error) {
 	if name == "" {
 		return "", ErrEmptyName
@@ -144,23 +103,6 @@ func (c *Client) GetParameter(ctx context.Context, name string) (string, error) 
 	return *output.Parameter.Value, nil
 }
 
-// CreateParameter creates a new parameter in SSM Parameter Store.
-//
-// Parameters:
-//   - ctx: Context for the AWS API call
-//   - name: The full path of the parameter to create
-//   - value: The parameter value
-//   - description: Optional description of the parameter
-//   - paramType: Parameter type (String or SecureString)
-//   - kmsKeyID: Optional KMS key ID for SecureString parameters
-//   - overwrite: Whether to overwrite an existing parameter
-//
-// Returns:
-//   - ErrEmptyName if name is empty
-//   - ErrEmptyValue if value is empty
-//   - ErrInvalidType if paramType is invalid
-//   - ErrParameterExists if parameter exists and overwrite is false
-//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) CreateParameter(ctx context.Context, name, value, description string, paramType string, kmsKeyID *string, overwrite bool) error {
 	if name == "" {
 		return ErrEmptyName
@@ -205,21 +147,7 @@ func (c *Client) CreateParameter(ctx context.Context, name, value, description s
 	return nil
 }
 
-// ModifyParameter updates an existing parameter in SSM Parameter Store.
-// It first verifies the parameter exists before attempting to modify it,
-// preventing accidental creation of new parameters.
-//
-// Parameters:
-//   - ctx: Context for the AWS API call
-//   - name: The full path of the parameter to modify
-//   - value: The new parameter value
-//   - description: Optional new description (empty string to keep existing)
-//
-// Returns:
-//   - ErrEmptyName if name is empty
-//   - ErrEmptyValue if value is empty
-//   - ErrNotFound if the parameter doesn't exist
-//   - ErrNoAccess if there are insufficient permissions
+// Checks param exists first to avoid accidental creation.
 func (c *Client) ModifyParameter(ctx context.Context, name, value, description string) error {
 	if name == "" {
 		return ErrEmptyName
@@ -228,8 +156,6 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 		return ErrEmptyValue
 	}
 
-	// Verify parameter exists before modifying to prevent accidental creation.
-	// PutParameter with Overwrite=true would create a new parameter if it doesn't exist.
 	_, err := c.GetParameter(ctx, name)
 	if err != nil {
 		return err
@@ -263,16 +189,6 @@ func (c *Client) ModifyParameter(ctx context.Context, name, value, description s
 	return nil
 }
 
-// DeleteParameter deletes a parameter from SSM Parameter Store.
-//
-// Parameters:
-//   - ctx: Context for the AWS API call
-//   - name: The full path of the parameter to delete
-//
-// Returns:
-//   - ErrEmptyName if name is empty
-//   - ErrNotFound if the parameter doesn't exist
-//   - ErrNoAccess if there are insufficient permissions
 func (c *Client) DeleteParameter(ctx context.Context, name string) error {
 	if name == "" {
 		return ErrEmptyName

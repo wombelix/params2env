@@ -15,20 +15,16 @@ import (
 )
 
 func setupExecuteTest(t *testing.T) func() {
-	// Save original osExit and restore after tests
 	origOsExit := osExit
-	// Save and restore environment
 	origRegion := os.Getenv("AWS_REGION")
 	os.Setenv("AWS_REGION", "eu-central-1")
 
-	// Override osExit for testing
 	var exitCode int
 	osExit = func(code int) {
 		exitCode = code
-		panic(exitCode) // Use panic to stop execution but allow deferred functions
+		panic(exitCode)
 	}
 
-	// Create mock AWS client
 	mockClient := &aws.MockSSMClient{
 		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
 			value := "test-value"
@@ -46,9 +42,7 @@ func setupExecuteTest(t *testing.T) func() {
 		},
 	}
 
-	// Save original NewClient and restore after tests
 	origNewClient := aws.NewClient
-	// Override NewClient for testing
 	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 		return &aws.Client{SSMClient: mockClient}, nil
 	}
@@ -66,7 +60,6 @@ func setupRootCmd() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
 
-	// Reset global variables for subcommands to avoid state leakage between tests
 	modifyPath = ""
 	modifyValue = ""
 	modifyDesc = ""

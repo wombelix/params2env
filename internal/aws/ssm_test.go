@@ -444,7 +444,6 @@ func TestDeleteParameter(t *testing.T) {
 	}
 }
 
-// Helper functions
 func stringContains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
@@ -453,9 +452,6 @@ func strPtr(s string) *string {
 	return &s
 }
 
-// TestStringContains verifies the stringContains helper works correctly,
-// especially for substrings in the middle of the string (which a buggy
-// start/end-only implementation would miss).
 func TestStringContains(t *testing.T) {
 	tests := []struct {
 		s      string
@@ -474,8 +470,6 @@ func TestStringContains(t *testing.T) {
 
 	for _, tt := range tests {
 		got := stringContains(tt.s, tt.substr)
-		// Note: strings.Contains("hello", "") returns true, but our wrapper should handle this
-		// For now, we're just using strings.Contains directly
 		if tt.substr == "" {
 			continue // Skip empty substr test since strings.Contains behavior differs
 		}

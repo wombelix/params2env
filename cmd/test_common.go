@@ -16,15 +16,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// containsString checks if a string contains a substring (case-insensitive)
 func containsString(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// testRoot is a shared root command for testing
 var testRoot = &cobra.Command{Use: "params2env"}
 
-// testSetup provides common test setup functionality
 type testSetup struct {
 	output        *bytes.Buffer
 	tmpDir        string
@@ -35,24 +32,20 @@ type testSetup struct {
 	cleanup       func()
 }
 
-// setupTest creates a common test environment
 func setupTest(t *testing.T) *testSetup {
 	var output bytes.Buffer
 	testRoot.SetOut(&output)
 
-	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "params2env-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	// Save environment
 	origHome := os.Getenv("HOME")
 	origRegion := os.Getenv("AWS_REGION")
 	origNewClient := aws.NewClient
 	origStdout := os.Stdout
 
-	// Set test environment
 	os.Setenv("HOME", tmpDir)
 	os.Setenv("AWS_REGION", "us-west-2")
 
@@ -75,21 +68,18 @@ func setupTest(t *testing.T) *testSetup {
 	}
 }
 
-// setupMockClient sets up a mock AWS client for testing
 func (ts *testSetup) setupMockClient(mockClient *aws.MockSSMClient) {
 	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 		return &aws.Client{SSMClient: mockClient}, nil
 	}
 }
 
-// setupConfigFile creates a test configuration file
 func (ts *testSetup) setupConfigFile(t *testing.T, content []byte) {
 	if err := os.WriteFile(filepath.Join(ts.tmpDir, ".params2env.yaml"), content, 0600); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 }
 
-// buildArgs builds command arguments from flags
 func buildArgs(command string, flags map[string]string) []string {
 	args := []string{command}
 	for flag, value := range flags {
@@ -100,7 +90,6 @@ func buildArgs(command string, flags map[string]string) []string {
 	return args
 }
 
-// setupCreateFlags sets up create command flags for testing
 func setupCreateFlags() {
 	createCmd.ResetFlags()
 	createCmd.Flags().StringVar(&createPath, "path", "", "Parameter path (required)")
@@ -114,7 +103,6 @@ func setupCreateFlags() {
 	createCmd.Flags().BoolVar(&createOverwrite, "overwrite", false, "Overwrite existing")
 }
 
-// setupModifyFlags sets up modify command flags for testing
 func setupModifyFlags() {
 	modifyCmd.ResetFlags()
 	modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")

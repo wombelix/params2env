@@ -2,17 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package main provides the entry point for the params2env CLI tool.
-//
-// params2env is a command-line tool for managing AWS SSM Parameter Store entries.
-// It allows users to read, create, modify, and delete parameters, with support for
-// replication across regions and secure string parameters using KMS keys.
-//
-// The tool supports both command line flags and YAML configuration files with the
-// following precedence:
-//  1. CLI arguments (highest priority)
-//  2. Configuration file in the current directory (.params2env.yaml)
-//  3. Configuration file in the home directory (~/.params2env.yaml)
+// CLI tool to manage AWS SSM Parameter Store entries.
+// Supports reading, creating, modifying, and deleting parameters.
+// Config precedence: CLI flags > .params2env.yaml (cwd) > ~/.params2env.yaml
 package main
 
 import (

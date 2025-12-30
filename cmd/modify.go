@@ -16,23 +16,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Command-line flags for the modify command
 var (
-	// modifyPath is the full path of the parameter to modify
-	modifyPath string
-	// modifyValue is the new value to assign to the parameter
-	modifyValue string
-	// modifyDesc is the new description for the parameter
-	modifyDesc string
-	// modifyRegion is the AWS region where the parameter will be modified
-	modifyRegion string
-	// modifyRole is the AWS IAM role to assume for the operation
-	modifyRole string
-	// modifyReplica is the region where the parameter replica should be modified
+	modifyPath    string
+	modifyValue   string
+	modifyDesc    string
+	modifyRegion  string
+	modifyRole    string
 	modifyReplica string
 )
 
-// modifyCmd represents the modify command
 var modifyCmd = &cobra.Command{
 	Use:   "modify",
 	Short: "Modify an existing parameter in SSM Parameter Store",
@@ -54,7 +46,6 @@ Examples:
 	RunE:    runModify,
 }
 
-// validateModifyFlags checks if all required flags are set and valid
 func validateModifyFlags(cmd *cobra.Command, args []string) error {
 	if modifyPath == "" {
 		return fmt.Errorf("required flag \"path\" not set")
@@ -82,33 +73,26 @@ func validateModifyFlags(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runModify executes the modify command
 func runModify(cmd *cobra.Command, args []string) error {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Merge config with flags (flags take precedence)
 	mergeModifyConfig(cfg)
 
-	// Ensure region is set
 	if err := ensureModifyRegionIsSet(); err != nil {
 		return err
 	}
 
-	// Validate regions are different
 	if err := validation.ValidateRegions(modifyRegion, modifyReplica); err != nil {
 		return err
 	}
 
-	// Modify parameter in primary region
 	if err := modifyInPrimaryRegion(); err != nil {
 		return err
 	}
 
-	// Handle replica if specified
 	if modifyReplica != "" {
 		if err := modifyInReplicaRegion(); err != nil {
 			return err
@@ -118,7 +102,6 @@ func runModify(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// mergeModifyConfig merges configuration from file with command line flags
 func mergeModifyConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
@@ -134,13 +117,11 @@ func mergeModifyConfig(cfg *config.Config) {
 	}
 }
 
-// ensureModifyRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureModifyRegionIsSet() error {
 	if modifyRegion == "" {
 		if modifyRegion = os.Getenv("AWS_REGION"); modifyRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
-		// Validate region from environment variable
 		if err := validation.ValidateRegion(modifyRegion); err != nil {
 			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
 		}
@@ -148,7 +129,6 @@ func ensureModifyRegionIsSet() error {
 	return nil
 }
 
-// modifyInPrimaryRegion modifies the parameter in the primary region
 func modifyInPrimaryRegion() error {
 	ctx := context.Background()
 	client, err := aws.NewClient(ctx, modifyRegion, modifyRole)
@@ -167,7 +147,6 @@ func modifyInPrimaryRegion() error {
 	return nil
 }
 
-// modifyInReplicaRegion modifies the parameter in the replica region
 func modifyInReplicaRegion() error {
 	ctx := context.Background()
 	replicaClient, err := aws.NewClient(ctx, modifyReplica, modifyRole)

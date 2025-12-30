@@ -16,19 +16,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Command-line flags for the delete command
 var (
-	// deletePath is the full path of the parameter to delete
-	deletePath string
-	// deleteRegion is the AWS region where the parameter will be deleted
-	deleteRegion string
-	// deleteRole is the AWS IAM role to assume for the operation
-	deleteRole string
-	// deleteReplica is the region where the parameter replica should be deleted
+	deletePath    string
+	deleteRegion  string
+	deleteRole    string
 	deleteReplica string
 )
 
-// deleteCmd represents the delete command
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a parameter from SSM Parameter Store",
@@ -50,7 +44,6 @@ Examples:
 	RunE:    runDelete,
 }
 
-// validateDeleteFlags checks if all required flags are set and valid
 func validateDeleteFlags(cmd *cobra.Command, args []string) error {
 	if deletePath == "" {
 		return fmt.Errorf("required flag \"path\" not set")
@@ -74,33 +67,26 @@ func validateDeleteFlags(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runDelete executes the delete command
 func runDelete(cmd *cobra.Command, args []string) error {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Merge config with flags (flags take precedence)
 	mergeDeleteConfig(cfg)
 
-	// Ensure region is set
 	if err := ensureDeleteRegionIsSet(); err != nil {
 		return err
 	}
 
-	// Validate regions are different
 	if err := validation.ValidateRegions(deleteRegion, deleteReplica); err != nil {
 		return err
 	}
 
-	// Delete parameter in primary region
 	if err := deleteInPrimaryRegion(); err != nil {
 		return err
 	}
 
-	// Handle replica if specified
 	if deleteReplica != "" {
 		if err := deleteInReplicaRegion(); err != nil {
 			return err
@@ -110,7 +96,6 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// mergeDeleteConfig merges configuration from file with command line flags
 func mergeDeleteConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
@@ -126,13 +111,11 @@ func mergeDeleteConfig(cfg *config.Config) {
 	}
 }
 
-// ensureDeleteRegionIsSet ensures AWS region is set from flags, config, or environment
 func ensureDeleteRegionIsSet() error {
 	if deleteRegion == "" {
 		if deleteRegion = os.Getenv("AWS_REGION"); deleteRegion == "" {
 			return fmt.Errorf("AWS region must be specified via --region, config file, or AWS_REGION environment variable")
 		}
-		// Validate region from environment variable
 		if err := validation.ValidateRegion(deleteRegion); err != nil {
 			return fmt.Errorf("invalid AWS_REGION environment variable: %w", err)
 		}
@@ -140,7 +123,6 @@ func ensureDeleteRegionIsSet() error {
 	return nil
 }
 
-// deleteInPrimaryRegion deletes the parameter in the primary region
 func deleteInPrimaryRegion() error {
 	ctx := context.Background()
 	client, err := aws.NewClient(ctx, deleteRegion, deleteRole)
@@ -160,7 +142,6 @@ func deleteInPrimaryRegion() error {
 	return nil
 }
 
-// deleteInReplicaRegion deletes the parameter in the replica region
 func deleteInReplicaRegion() error {
 	ctx := context.Background()
 	replicaClient, err := aws.NewClient(ctx, deleteReplica, deleteRole)

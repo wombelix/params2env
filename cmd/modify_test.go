@@ -62,11 +62,9 @@ func TestRunModify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.output.Reset()
 
-			// Setup flags using helper
 			setupModifyFlags()
 			testRoot.AddCommand(modifyCmd)
 
-			// Build args
 			args := buildArgs("modify", map[string]string{
 				"path":        tt.flags.path,
 				"value":       tt.flags.value,

@@ -332,7 +332,6 @@ func TestMergeConfig(t *testing.T) {
 	}
 }
 
-// Helper function to create bool pointer
 func boolPtr(b bool) *bool {
 	return &b
 }

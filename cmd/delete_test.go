@@ -22,7 +22,6 @@ type deleteFlags struct {
 }
 
 func setupDeleteFlags(t *testing.T) {
-	// Reset global variables
 	deletePath = ""
 	deleteRegion = ""
 	deleteRole = ""
@@ -130,7 +129,6 @@ type deleteTestCase struct {
 func runDeleteTest(t *testing.T, ts *testSetup, tt deleteTestCase, mockFunc func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error)) {
 	ts.output.Reset()
 
-	// Only setup mock client if we expect the command to reach AWS operations
 	if tt.name != "missing_path" {
 		mockClient := &aws.MockSSMClient{DeleteParamFunc: mockFunc}
 		ts.setupMockClient(mockClient)
@@ -202,8 +200,7 @@ replica: eu-west-1
 	}
 }
 
-// TestDeleteReplicaNotFound tests that replica deletion behavior is consistent with primary region.
-// This test expects replica deletion to fail when parameter is not found, matching primary region behavior.
+// Replica deletion should fail if param not found, same as primary.
 func TestDeleteReplicaNotFound(t *testing.T) {
 	ts := setupDeleteTest(t)
 	defer ts.cleanup()
@@ -245,19 +242,16 @@ func TestDeleteReplicaNotFound(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts.output.Reset()
 
-			// Track which region is being called to return appropriate error
 			callCount := 0
 			mockClient := &aws.MockSSMClient{
 				DeleteParamFunc: func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
 					callCount++
 					if callCount == 1 {
-						// First call is primary region
 						if tt.primaryError != nil {
 							return nil, tt.primaryError
 						}
 						return &ssm.DeleteParameterOutput{}, nil
 					} else {
-						// Second call is replica region
 						if tt.replicaError != nil {
 							return nil, tt.replicaError
 						}
