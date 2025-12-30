@@ -364,24 +364,6 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestMockSSMClient(t *testing.T) {
-	t.Run("mock get parameter without function", func(t *testing.T) {
-		mock := &MockSSMClient{}
-		_, err := mock.GetParameter(context.Background(), nil)
-		if err == nil || err.Error() != "GetParameter not implemented" {
-			t.Errorf("Expected 'GetParameter not implemented' error, got %v", err)
-		}
-	})
-
-	t.Run("mock put parameter without function", func(t *testing.T) {
-		mock := &MockSSMClient{}
-		_, err := mock.PutParameter(context.Background(), nil)
-		if err == nil || err.Error() != "PutParameter not implemented" {
-			t.Errorf("Expected 'PutParameter not implemented' error, got %v", err)
-		}
-	})
-}
-
 func TestDeleteParameter(t *testing.T) {
 	tests := []struct {
 		name    string

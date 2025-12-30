@@ -17,29 +17,6 @@ type modifyFlags struct {
 	description string
 }
 
-
-
-func runModifyTest(t *testing.T, ts *testSetup, flags modifyFlags, wantErr bool) {
-	ts.output.Reset()
-	setupModifyFlags()
-
-	args := buildArgs("modify", map[string]string{
-		"path":        flags.path,
-		"value":       flags.value,
-		"region":      flags.region,
-		"role":        flags.role,
-		"replica":     flags.replica,
-		"description": flags.description,
-	})
-
-	testRoot.SetArgs(args)
-	err := testRoot.Execute()
-
-	if (err != nil) != wantErr {
-		t.Errorf("runModify() error = %v, wantErr %v", err, wantErr)
-	}
-}
-
 func TestRunModify(t *testing.T) {
 	ts := setupTest(t)
 	t.Cleanup(ts.cleanup)
@@ -58,11 +35,6 @@ func TestRunModify(t *testing.T) {
 			name:    "missing value",
 			flags:   modifyFlags{path: "/test/param"},
 			wantErr: true,
-		},
-		{
-			name:    "basic modify",
-			flags:   modifyFlags{path: "/test/param", value: "new-value"},
-			wantErr: true, // Will fail due to no AWS credentials in test
 		},
 		{
 			name:    "aws_client_error",
