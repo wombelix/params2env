@@ -195,6 +195,9 @@ func createInReplicaRegion() error {
 	}
 
 	if err := replicaClient.CreateParameter(ctx, createPath, createValue, createDesc, createType, replicaKMSKeyID, createOverwrite); err != nil {
+		if replicaKMSKeyID != nil && strings.Contains(err.Error(), "KMS") {
+			return fmt.Errorf("failed to create parameter in replica region: %w\nHint: if using a single-region KMS key, create a key in the replica region and run separate create commands for each region", err)
+		}
 		return fmt.Errorf("failed to create parameter in replica region: %w", err)
 	}
 

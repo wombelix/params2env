@@ -48,6 +48,12 @@ Binaries for Linux, macOS, and Windows on
 [GitHub Releases](https://github.com/wombelix/params2env/releases).
 Download and add to PATH.
 
+Or install via Go:
+
+```bash
+go install git.sr.ht/~wombelix/params2env@latest
+```
+
 ## Usage
 
 Global flags:
@@ -58,7 +64,7 @@ Global flags:
 
 ### Subcommand: read
 
-* `--region`: AWS region (or use `AWS_REGION` env var)
+* `--region`: AWS region (or use `AWS_REGION`/`AWS_PROFILE` env vars)
 * `--path`: Parameter path (required)
 * `--role`: IAM role ARN to assume
 * `--file`: Output file (default: stdout)
