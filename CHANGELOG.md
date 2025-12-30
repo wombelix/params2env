@@ -1,3 +1,13 @@
+## v0.2.0 (2025-12-30)
+
+### Feat
+
+- shell completion added
+
+### Fix
+
+- validate inputs, prevent modify from creating params
+
 ## v0.1.5 (2025-08-07)
 
 ### Fix
