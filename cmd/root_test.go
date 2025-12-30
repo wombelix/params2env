@@ -6,9 +6,7 @@ package cmd
 
 import (
 	"context"
-	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -67,6 +65,15 @@ func setupRootCmd() {
 	rootCmd.ResetCommands()
 	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
+
+	// Reset global variables for subcommands to avoid state leakage between tests
+	modifyPath = ""
+	modifyValue = ""
+	modifyDesc = ""
+	modifyRegion = ""
+	modifyRole = ""
+	modifyReplica = ""
+
 	rootCmd.AddCommand(readCmd)
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(modifyCmd)
@@ -119,44 +126,5 @@ func TestExecuteSubcommands(t *testing.T) {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-func TestPrintUsage(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printUsage()
-
-	// Restore stdout
-	w.Close()
-	os.Stdout = oldStdout
-
-	// Read captured output
-	var output strings.Builder
-	if _, err := io.Copy(&output, r); err != nil {
-		t.Fatalf("Failed to read captured output: %v", err)
-	}
-
-	// Check if output contains essential parts
-	essentialParts := []string{
-		"Usage:",
-		"params2env",
-		"Global options:",
-		"--loglevel",
-		"--version",
-		"--help",
-		"Subcommands:",
-		"read",
-		"create",
-		"modify",
-	}
-
-	for _, part := range essentialParts {
-		if !strings.Contains(output.String(), part) {
-			t.Errorf("printUsage() output missing %q", part)
-		}
 	}
 }

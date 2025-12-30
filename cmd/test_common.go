@@ -9,11 +9,17 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"github.com/spf13/cobra"
 )
+
+// containsString checks if a string contains a substring (case-insensitive)
+func containsString(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
 
 // testRoot is a shared root command for testing
 var testRoot = &cobra.Command{Use: "params2env"}
