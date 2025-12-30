@@ -13,6 +13,7 @@ SPDX-License-Identifier: Apache-2.0
 ## Table of Contents
 
 * [Installation](#installation)
+* [Shell Completion](#shell-completion)
 * [CLI](#cli)
    * [Technical details](#technical-details)
 * [Usage](#usage)
@@ -52,6 +53,24 @@ Or install via Go:
 
 ```bash
 go install git.sr.ht/~wombelix/params2env@latest
+```
+
+## Shell Completion
+
+Generate shell completion scripts for tab completion of commands and flags.
+
+```bash
+# Bash (add to ~/.bashrc)
+source <(params2env completion bash)
+
+# Zsh (add to ~/.zshrc)
+source <(params2env completion zsh)
+
+# Fish (add to ~/.config/fish/config.fish)
+params2env completion fish | source
+
+# PowerShell (add to $PROFILE)
+params2env completion powershell | Out-String | Invoke-Expression
 ```
 
 ## Usage

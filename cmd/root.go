@@ -55,51 +55,11 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(modifyCmd)
 	rootCmd.AddCommand(deleteCmd)
+
+	rootCmd.InitDefaultCompletionCmd()
 }
 
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
-}
-
-func printUsage() {
-	fmt.Printf(`Usage: params2env [global options] <subcommand> [subcommand options]
-
-A tool to manage AWS SSM Parameter Store entries.
-
-Global options:
-  --loglevel string   Log level (debug, info, warn, error) (default "info")
-  --version           Show version information
-  --help             Show this help message
-
-Subcommands:
-  read    Read a parameter from SSM Parameter Store
-    Options:
-      --path string     Parameter path (required)
-      --region string   AWS region (optional, default: from AWS config or environment)
-      --role string     AWS role ARN to assume (optional)
-
-  create  Create a new parameter in SSM Parameter Store
-    Options:
-      --path string        Parameter path (required)
-      --value string       Parameter value (required)
-      --type string        Parameter type (String or SecureString) (default: String)
-      --description string Parameter description (optional)
-      --kms string         KMS key ID for SecureString parameters (optional)
-      --region string      AWS region (optional, default: from AWS config or environment)
-      --role string        AWS role ARN to assume (optional)
-      --replica string     Region to replicate the parameter to (optional)
-      --overwrite bool     Overwrite existing parameter (optional, default: false)
-
-  modify  Modify an existing parameter in SSM Parameter Store
-    Options:
-      --path string        Parameter path (required)
-      --value string       New parameter value (required)
-      --description string New parameter description (optional)
-      --region string      AWS region (optional, default: from AWS config or environment)
-      --role string        AWS role ARN to assume (optional)
-      --replica string     Region to replicate the parameter to (optional)
-
-For more information, visit: https://git.sr.ht/~wombelix/params2env
-`)
 }
