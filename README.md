@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 
-SPDX-License-Identifier: CC0-1.0
+SPDX-License-Identifier: Apache-2.0
 -->
 
 # AWS SSM Parameter Store to Environment variables

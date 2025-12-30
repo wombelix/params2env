@@ -2,7 +2,7 @@
 
 # SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 #
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 
 # Exit on error, but ensure we run cleanup first
 set -e

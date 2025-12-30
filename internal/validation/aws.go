@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 //
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Package validation provides validation functions for AWS resource names and other inputs.
 //

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 //
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Package main provides the entry point for the params2env CLI tool.
 //

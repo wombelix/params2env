@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
 //
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Package config provides configuration management for the params2env tool.
 //
