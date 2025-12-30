@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+# SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+version: '3'
+
+tasks:
+  default:
+    cmd: task --list
+    silent: true
+
+  build:
+    desc: Build params2env
+    cmds:
+      - go build -o params2env
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - go test -v -cover ./...
+
+  clean:
+    desc: Clean up build artifacts
+    cmds:
+      - rm -f params2env
+      - rm -f coverage.out
+
+  release:
+    desc: Create release (Changelog, Git tag, push)
+    cmds:
+      - cz bump
+      # Push main branch with skip-ci to avoid triggering workflows
+      - git push origin main -o skip-ci
+      # Push tag (triggers sr.ht build git mirroring)
+      - git push origin --tags
