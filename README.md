@@ -89,7 +89,20 @@ Global flags:
 * `--file`: Output file (default: stdout)
 * `--upper`: Uppercase env var names (default: `true`)
 * `--env-prefix`: Prefix for env var names
-* `--env`: Custom env var name (default: parameter name)
+* `--env`: Custom env var name (overrides auto-generated name)
+
+**Environment variable naming:**
+
+By default, the env var name is the last segment of the parameter path.
+With `--upper` (enabled by default), it gets uppercased.
+
+| Parameter Path | `--env-prefix` | `--upper` | Result |
+|----------------|----------------|-----------|--------|
+| `/app/db_password` | - | true | `DB_PASSWORD` |
+| `/app/db_password` | `APP` | true | `APP_DB_PASSWORD` |
+| `/app/db_password` | - | false | `db_password` |
+
+Use `--env` to set a fully custom name when auto-generation doesn't fit.
 
 Example:
 
@@ -173,9 +186,12 @@ params2env delete --region "eu-central-1" --replica "eu-west-1" \
   --role "arn:aws:iam::111122223333:role/my-role"
 ```
 
-### YAML config file
+### YAML configuration file reference
 
-Per-param settings override globals.
+Config file locations (local overrides global):
+
+* Global: `~/.params2env.yaml`
+* Local: `.params2env.yaml`
 
 ```yaml
 region: <aws region>
@@ -193,27 +209,79 @@ params:
     output: <output format override>
 ```
 
-Example:
+#### Config fields by command
+
+| Config Field | `create` | `modify` | `delete` | `read` |
+|--------------|----------|----------|----------|--------|
+| `region` | ✓ | ✓ | ✓ | ✓ |
+| `replica` | ✓ | ✓ | ✓ | - |
+| `role` | ✓ | ✓ | ✓ | ✓ |
+| `kms` | ✓ | - | - | - |
+| `env_prefix` | - | - | - | ✓ |
+| `file` | - | - | - | ✓ |
+| `upper` | - | - | - | ✓ |
+| `params` | - | - | - | ✓ |
+
+Notes:
+
+* `kms` is only needed for `create` with SecureString.
+  Modify/delete don't change encryption.
+* `replica` keeps parameters in sync across regions during write operations.
+* `read` fetches from one region only.
+  Use per-param `region` override for multi-region reads.
+
+#### Example: Simplify commands with config
+
+Without config, creating a SecureString requires many flags:
+
+```bash
+params2env create --path /app/secret --value "s3cr3t" --type SecureString \
+  --region eu-central-1 --replica eu-west-1 \
+  --role arn:aws:iam::123456789012:role/my-role --kms alias/my-key
+```
+
+With this config file:
+
+```yaml
+region: eu-central-1
+replica: eu-west-1
+role: arn:aws:iam::123456789012:role/my-role
+kms: alias/my-key
+```
+
+Commands simplify to:
+
+```bash
+# Create - only path, value, type needed
+params2env create --path /app/secret --value "s3cr3t" --type SecureString
+
+# Modify - only path and value needed
+params2env modify --path /app/secret --value "new-value"
+
+# Delete - only path needed
+params2env delete --path /app/secret
+```
+
+#### Example: Batch read with config
 
 ```yaml
 region: eu-central-1
 role: arn:aws:iam::123456789012:role/my-role
-env_prefix: APP_
+env_prefix: APP
 upper: true
 params:
-  - name: /app/db/url
-    env: DB_URL
-    region: us-east-1  # Override region for this parameter
-  - name: /app/db/user
-    env: DB_USER
-  - name: /app/db/password
-    env: DB_PASSWORD
+  - name: /app/db_password              # → APP_DB_PASSWORD (auto)
+  - name: /app/api_token                # → APP_API_TOKEN (auto)
+  - name: /legacy/weird-name.v2
+    env: LEGACY_KEY                     # → LEGACY_KEY (override)
+  - name: /other/endpoint
+    region: us-east-1                   # → APP_ENDPOINT (different region)
 ```
 
 ```bash
-params2env read                    # Read all from config
-params2env read --file ~/.env      # Write to file
-params2env read --path /custom/param  # Override config
+params2env read                       # Read all from config
+params2env read --file ~/.env         # Write to file
+params2env read --path /custom/param  # Single param (ignores params list)
 ```
 
 ## Build and Test
