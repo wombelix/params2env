@@ -1,3 +1,9 @@
+## v0.3.0 (2026-01-01)
+
+### Feat
+
+- stdin and interactive input for create/modify
+
 ## v0.2.0 (2025-12-30)
 
 ### Feat
