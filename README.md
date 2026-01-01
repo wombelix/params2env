@@ -135,11 +135,17 @@ source <(params2env read --path "/my/secret")
 * `--replica`: Replica region
 * `--path`: Parameter path (required)
 * `--description`: Parameter description
-* `--value`: Parameter value (required)
+* `--value`: Parameter value (optional, see below)
 * `--type`: `String` or `SecureString` (default: `String`)
-* `--kms`: KMS Key ID for SecureString (e.g., `alias/myapp-key`)
+* `--kms`: KMS Key ID for SecureString (e.g., `alias/aws/ssm` or `alias/myapp-key`)
 * `--role`: IAM role ARN to assume
 * `--overwrite`: Overwrite existing (default: `false`)
+
+**Value input methods (in order of precedence):**
+
+1. `--value` flag
+1. Piped stdin (e.g., `echo "secret" | params2env create ...`)
+1. Interactive prompt (SecureString: hidden, String: visible)
 
 Example:
 
@@ -150,6 +156,16 @@ params2env create --region "eu-central-1" --replica "eu-west-1" \
   --value "S3cr3t" --type "SecureString" \
   --kms "alias/myapp-key" \
   --role "arn:aws:iam::111122223333:role/my-role"
+
+# Pipe value to avoid shell history
+echo "S3cr3t" | params2env create --path "/my/secret" \
+  --type "SecureString" --kms "alias/myapp-key"
+
+# AWS managed key
+params2env create --path "/my/secret" --type "SecureString" --kms "alias/aws/ssm"
+
+# Interactive (prompts for value, hidden for SecureString)
+params2env create --path "/my/secret" --type "SecureString" --kms "alias/myapp-key"
 ```
 
 ### Subcommand: modify
@@ -158,8 +174,14 @@ params2env create --region "eu-central-1" --replica "eu-west-1" \
 * `--replica`: Replica region
 * `--path`: Parameter path (required)
 * `--description`: Parameter description
-* `--value`: New value (required)
+* `--value`: New value (optional, see below)
 * `--role`: IAM role ARN to assume
+
+**Value input methods (in order of precedence):**
+
+1. `--value` flag
+1. Piped stdin (e.g., `echo "newvalue" | params2env modify ...`)
+1. Interactive prompt
 
 Example:
 
@@ -169,6 +191,12 @@ params2env modify --region "eu-central-1" --replica "eu-west-1" \
   --description "Secret stored as SecureString" \
   --value "S3cr3t" \
   --role "arn:aws:iam::111122223333:role/my-role"
+
+# Pipe value
+echo "NewValue" | params2env modify --path "/my/secret"
+
+# Interactive
+params2env modify --path "/my/secret"
 ```
 
 ### Subcommand: delete
@@ -252,13 +280,10 @@ kms: alias/my-key
 Commands simplify to:
 
 ```bash
-# Create - only path, value, type needed
 params2env create --path /app/secret --value "s3cr3t" --type SecureString
-
-# Modify - only path and value needed
+params2env create --path /app/secret --type SecureString  # prompts for value
 params2env modify --path /app/secret --value "new-value"
-
-# Delete - only path needed
+params2env modify --path /app/secret                      # prompts for value
 params2env delete --path /app/secret
 ```
 
@@ -302,11 +327,16 @@ export PRIMARY_REGION="eu-central-1"
 export SECONDARY_REGION="eu-west-1"
 export AWS_IAM_PRINCIPAL="arn:aws:iam::123456789012:role/YourRole"
 
+# Optional: use existing KMS keys instead of creating new ones
+export PRIMARY_KEY_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+export REPLICA_KEY_ID="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+
 ./tests/integration-tests.sh
 ```
 
 Creates IAM roles/policies, tests all param types, cleans up after.
 KMS tests cost $1/month per key - script asks before creating.
+Set `PRIMARY_KEY_ID` and `REPLICA_KEY_ID` to use existing keys.
 
 ## Source
 

@@ -93,7 +93,7 @@ func buildArgs(command string, flags map[string]string) []string {
 func setupCreateFlags() {
 	createCmd.ResetFlags()
 	createCmd.Flags().StringVar(&createPath, "path", "", "Parameter path (required)")
-	createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value (required)")
+	createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value")
 	createCmd.Flags().StringVar(&createType, "type", "String", "Parameter type")
 	createCmd.Flags().StringVar(&createDesc, "description", "", "Parameter description")
 	createCmd.Flags().StringVar(&createKMS, "kms", "", "KMS key ID")
@@ -106,7 +106,7 @@ func setupCreateFlags() {
 func setupModifyFlags() {
 	modifyCmd.ResetFlags()
 	modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
-	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
+	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value")
 	modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
 	modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region")
 	modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN")

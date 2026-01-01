@@ -392,8 +392,10 @@ print_resource_info() {
     echo "2. SSM Parameters:"
     echo "   All parameters will be created under /params2env-test/* prefix:"
     echo "   - /params2env-test/string-param"
+    echo "   - /params2env-test/string-param-stdin"
     echo "   - /params2env-test/string-param-no-role"
     echo "   - /params2env-test/secure-param-aws"
+    echo "   - /params2env-test/secure-param-stdin"
     if [ -n "${PRIMARY_KEY_ID}" ] && [ -n "${REPLICA_KEY_ID}" ]; then
         echo "   - /params2env-test/secure-param-custom"
     fi
@@ -716,10 +718,16 @@ envsubst < .params2env.yaml.template > .params2env.yaml
 echo -e "\n${GREEN}=== Testing String Parameters ===${NC}"
 
 run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
-    "Create String parameter (with role)"
+    "Create String parameter (with role, --value flag)"
 
 run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
     "Read String parameter (with role)"
+
+run_cmd "echo 'test-value-stdin' | $PARAMS2ENV create --path '/params2env-test/string-param-stdin' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
+    "Create String parameter (with role, via stdin)"
+
+run_cmd "$PARAMS2ENV read --path '/params2env-test/string-param-stdin' --region '${PRIMARY_REGION}' --role 'arn:aws:iam::${AWS_ACCOUNT_ID}:role/params2env-test-role'" \
+    "Read String parameter created via stdin"
 
 run_cmd "$PARAMS2ENV create --path '/params2env-test/string-param-no-role' --value 'test-value-1' --type 'String' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
     "Create String parameter (without role)"
@@ -741,8 +749,14 @@ run_cmd "$PARAMS2ENV modify --path '/params2env-test/string-param' --value 'test
 
 echo -e "\n${GREEN}=== Testing SecureString Parameters (AWS Managed Key) ===${NC}"
 
-run_cmd "$PARAMS2ENV create --path '/params2env-test/secure-param-aws' --value 'secure-value-1' --type 'SecureString' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
-    "Create SecureString parameter (AWS managed key)"
+run_cmd "$PARAMS2ENV create --path '/params2env-test/secure-param-aws' --value 'secure-value-1' --type 'SecureString' --kms 'alias/aws/ssm' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    "Create SecureString parameter (AWS managed key, --value flag)"
+
+run_cmd "echo 'secure-stdin-value' | $PARAMS2ENV create --path '/params2env-test/secure-param-stdin' --type 'SecureString' --kms 'alias/aws/ssm' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    "Create SecureString parameter (AWS managed key, via stdin)"
+
+run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-stdin' --region '${PRIMARY_REGION}'" \
+    "Read SecureString parameter created via stdin"
 
 run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-aws' --region '${PRIMARY_REGION}'" \
     "Read SecureString parameter (default output)"
@@ -751,7 +765,10 @@ run_cmd "$PARAMS2ENV read --path '/params2env-test/secure-param-aws' --file './t
     "Read SecureString parameter (to file)"
 
 run_cmd "$PARAMS2ENV modify --path '/params2env-test/secure-param-aws' --value 'secure-value-2' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
-    "Modify SecureString parameter"
+    "Modify SecureString parameter (--value flag)"
+
+run_cmd "echo 'modified-via-stdin' | $PARAMS2ENV modify --path '/params2env-test/secure-param-stdin' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
+    "Modify SecureString parameter (via stdin)"
 
 if [[ $USE_CUSTOM_KMS =~ ^[Yy]$ ]]; then
     echo -e "\n${GREEN}=== Testing SecureString Parameters (Customer Managed Key) ===${NC}"
@@ -858,7 +875,7 @@ run_cmd_expect_fail "$PARAMS2ENV create --path '$long_param_name' --value 'test'
 echo -e "\n${GREEN}=== Cleanup ===${NC}"
 
 echo -e "${YELLOW}Cleaning up SSM parameters...${NC}"
-for param in "/params2env-test/string-param" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/param1" "/params2env-test/param2" "/params2env-test/special-chars"; do
+for param in "/params2env-test/string-param" "/params2env-test/string-param-stdin" "/params2env-test/string-param-no-role" "/params2env-test/secure-param-aws" "/params2env-test/secure-param-stdin" "/params2env-test/param1" "/params2env-test/param2" "/params2env-test/special-chars"; do
     run_cmd "$PARAMS2ENV delete --path '$param' --region '${PRIMARY_REGION}' --replica '${SECONDARY_REGION}'" \
         "Delete parameter: $param" || true
 done

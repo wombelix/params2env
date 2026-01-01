@@ -5,15 +5,19 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
 	"git.sr.ht/~wombelix/params2env/internal/config"
 	"git.sr.ht/~wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -31,14 +35,17 @@ var modifyCmd = &cobra.Command{
 	Long: `Modify an existing parameter in SSM Parameter Store.
 
 The parameter will be updated with the specified value.
-Optionally, you can update the description.
+Value can be provided via --value flag, piped stdin, or interactive prompt.
 
 Examples:
   # Modify a parameter's value
   params2env modify --path /myapp/config/url --value https://newexample.com
 
-  # Modify a parameter's value and description
-  params2env modify --path /myapp/config/url --value https://newexample.com --description "Updated URL"
+  # Modify with interactive prompt
+  params2env modify --path /myapp/config/url
+
+  # Pipe new value
+  echo "newvalue" | params2env modify --path /myapp/config/url
 
   # Modify a parameter and its replica
   params2env modify --path /myapp/config/url --value https://newexample.com --replica us-west-2`,
@@ -52,10 +59,6 @@ func validateModifyFlags(cmd *cobra.Command, args []string) error {
 	}
 	if err := validation.ValidateParameterPath(modifyPath); err != nil {
 		return err
-	}
-
-	if modifyValue == "" {
-		return fmt.Errorf("required flag \"value\" not set")
 	}
 
 	if err := validation.ValidateRegion(modifyRegion); err != nil {
@@ -89,6 +92,22 @@ func runModify(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	valueProvided := cmd.Flags().Changed("value")
+	if valueProvided && modifyValue == "" {
+		return fmt.Errorf("value cannot be empty")
+	}
+
+	if !valueProvided {
+		value, err := readModifyValueInteractive()
+		if err != nil {
+			return fmt.Errorf("failed to read value: %w", err)
+		}
+		modifyValue = value
+		if modifyValue == "" {
+			return fmt.Errorf("value cannot be empty")
+		}
+	}
+
 	if err := modifyInPrimaryRegion(); err != nil {
 		return err
 	}
@@ -100,6 +119,33 @@ func runModify(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func readModifyValueInteractive() (string, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return readModifyFromStdin()
+	}
+
+	fmt.Fprint(os.Stderr, "Enter parameter value: ")
+	reader := bufio.NewReader(os.Stdin)
+	value, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read value: %w", err)
+	}
+	value = strings.TrimSuffix(value, "\n")
+	value = strings.TrimSuffix(value, "\r")
+	return value, nil
+}
+
+func readModifyFromStdin() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	value, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read from stdin: %w", err)
+	}
+	value = strings.TrimSuffix(value, "\n")
+	value = strings.TrimSuffix(value, "\r")
+	return value, nil
 }
 
 func mergeModifyConfig(cfg *config.Config) {
@@ -167,15 +213,12 @@ func modifyInReplicaRegion() error {
 
 func init() {
 	modifyCmd.Flags().StringVar(&modifyPath, "path", "", "Parameter path (required)")
-	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (required)")
+	modifyCmd.Flags().StringVar(&modifyValue, "value", "", "Parameter value (optional, can be provided via stdin or interactive prompt)")
 	modifyCmd.Flags().StringVar(&modifyDesc, "description", "", "Parameter description")
 	modifyCmd.Flags().StringVar(&modifyRegion, "region", "", "AWS region (optional, default: from AWS config or environment)")
 	modifyCmd.Flags().StringVar(&modifyRole, "role", "", "AWS role ARN to assume (optional)")
 	modifyCmd.Flags().StringVar(&modifyReplica, "replica", "", "Region to replicate the parameter to")
 	if err := modifyCmd.MarkFlagRequired("path"); err != nil {
-		panic(err)
-	}
-	if err := modifyCmd.MarkFlagRequired("value"); err != nil {
 		panic(err)
 	}
 }

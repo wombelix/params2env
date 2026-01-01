@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package cmd implements the command-line interface for params2env.
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"git.sr.ht/~wombelix/params2env/internal/config"
 	"git.sr.ht/~wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -35,16 +37,20 @@ var createCmd = &cobra.Command{
 	Long: `Create a new parameter in SSM Parameter Store.
 
 The parameter will be created with the specified value and type.
-Optionally, you can provide a description and KMS key for SecureString parameters.
+Value can be provided via --value flag, piped stdin, or interactive prompt.
+SecureString prompts use hidden input; String prompts are visible.
 
 Examples:
   # Create a String parameter
-  params2env create --path /myapp/config/url --value https://example.com --type String
+  params2env create --path /myapp/config/url --value https://example.com
 
-  # Create a SecureString parameter with KMS key
-  params2env create --path /myapp/secrets/api-key --value mysecret --type SecureString --kms alias/mykey
+  # Create a SecureString parameter (prompts for value)
+  params2env create --path /myapp/secrets/api-key --type SecureString --kms alias/mykey
 
-  # Create a parameter and replicate it to another region
+  # Pipe value from another command
+  echo "mysecret" | params2env create --path /myapp/secrets/token --type SecureString --kms alias/mykey
+
+  # Create and replicate to another region
   params2env create --path /myapp/config/shared --value myvalue --replica us-west-2`,
 	PreRunE: validateCreateFlags,
 	RunE:    runCreate,
@@ -56,10 +62,6 @@ func validateCreateFlags(cmd *cobra.Command, args []string) error {
 	}
 	if err := validation.ValidateParameterPath(createPath); err != nil {
 		return err
-	}
-
-	if createValue == "" {
-		return fmt.Errorf("required flag \"value\" not set")
 	}
 
 	if err := validation.ValidateRegion(createRegion); err != nil {
@@ -105,6 +107,22 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	valueProvided := cmd.Flags().Changed("value")
+	if valueProvided && createValue == "" {
+		return fmt.Errorf("value cannot be empty")
+	}
+
+	if !valueProvided {
+		value, err := readValueInteractive(createType)
+		if err != nil {
+			return fmt.Errorf("failed to read value: %w", err)
+		}
+		createValue = value
+		if createValue == "" {
+			return fmt.Errorf("value cannot be empty")
+		}
+	}
+
 	if err := createInPrimaryRegion(); err != nil {
 		return err
 	}
@@ -116,6 +134,43 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func readValueInteractive(paramType string) (string, error) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return readFromStdin()
+	}
+
+	if paramType == aws.ParameterTypeSecureString {
+		fmt.Fprint(os.Stderr, "Enter parameter value: ")
+		value, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return "", fmt.Errorf("failed to read value: %w", err)
+		}
+		return string(value), nil
+	}
+
+	fmt.Fprint(os.Stderr, "Enter parameter value: ")
+	reader := bufio.NewReader(os.Stdin)
+	value, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read value: %w", err)
+	}
+	value = strings.TrimSuffix(value, "\n")
+	value = strings.TrimSuffix(value, "\r")
+	return value, nil
+}
+
+func readFromStdin() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	value, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read from stdin: %w", err)
+	}
+	value = strings.TrimSuffix(value, "\n")
+	value = strings.TrimSuffix(value, "\r")
+	return value, nil
 }
 
 func mergeCreateConfig(cfg *config.Config) {
@@ -205,8 +260,7 @@ func createInReplicaRegion() error {
 	return nil
 }
 
-// For aliases or key IDs, returns input unchanged.
-// For ARNs, builds a new ARN for the replica region.
+// For aliases or key IDs, returns input unchanged. For ARNs, builds a new ARN for the replica region.
 func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) (*string, error) {
 	if !strings.HasPrefix(kmsKeyID, "arn:") {
 		return &kmsKeyID, nil
@@ -242,7 +296,7 @@ func getReplicaKMSKeyID(kmsKeyID, replicaRegion string) (*string, error) {
 
 func init() {
 	createCmd.Flags().StringVar(&createPath, "path", "", "Parameter path (required)")
-	createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value (required)")
+	createCmd.Flags().StringVar(&createValue, "value", "", "Parameter value (optional, can be provided via stdin or interactive prompt)")
 	createCmd.Flags().StringVar(&createType, "type", aws.ParameterTypeString, "Parameter type (String or SecureString)")
 	createCmd.Flags().StringVar(&createDesc, "description", "", "Parameter description")
 	createCmd.Flags().StringVar(&createKMS, "kms", "", "KMS key ID for SecureString parameters")

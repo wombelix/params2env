@@ -5,7 +5,9 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"testing"
 
@@ -30,9 +32,10 @@ func TestRunCreate(t *testing.T) {
 	defer ts.cleanup()
 
 	tests := []struct {
-		name    string
-		flags   createFlags
-		wantErr bool
+		name       string
+		flags      createFlags
+		stdinValue string
+		wantErr    bool
 	}{
 		{
 			name:    "missing_path",
@@ -40,29 +43,37 @@ func TestRunCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "missing_value",
-			flags:   createFlags{path: "/test/param"},
-			wantErr: true,
-		},
-		{
-			name:    "basic_create",
+			name:    "basic_create_with_value_flag",
 			flags:   createFlags{path: "/test/param", value: "test", region: "us-west-2"},
 			wantErr: false,
 		},
 		{
-			name:    "create_with_description",
+			name:    "create_with_description_value_flag",
 			flags:   createFlags{path: "/test/param", value: "test", description: "Test parameter", region: "us-west-2"},
 			wantErr: false,
 		},
 		{
-			name:    "create_with_replica",
+			name:    "create_with_replica_value_flag",
 			flags:   createFlags{path: "/test/param", value: "test", region: "us-west-2", replica: "eu-west-1"},
 			wantErr: false,
 		},
 		{
-			name:    "create_with_kms",
-			flags:   createFlags{path: "/test/param", value: "test", paramType: "SecureString", kms: "alias/aws/ssm", region: "us-west-2"},
-			wantErr: false,
+			name:       "create_string_via_stdin",
+			flags:      createFlags{path: "/test/param", region: "us-west-2"},
+			stdinValue: "test-from-stdin",
+			wantErr:    false,
+		},
+		{
+			name:       "create_securestring_via_stdin",
+			flags:      createFlags{path: "/test/param", paramType: "SecureString", kms: "alias/aws/ssm", region: "us-west-2"},
+			stdinValue: "mysecretvalue",
+			wantErr:    false,
+		},
+		{
+			name:       "no_value_no_stdin",
+			flags:      createFlags{path: "/test/param", region: "us-west-2"},
+			stdinValue: "",
+			wantErr:    true,
 		},
 		{
 			name:    "invalid_type",
@@ -80,14 +91,28 @@ func TestRunCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "secure_string_without_kms",
-			flags:   createFlags{path: "/test/param", value: "test", paramType: "SecureString", region: "us-west-2"},
-			wantErr: true,
+			name:       "secure_string_without_kms",
+			flags:      createFlags{path: "/test/param", paramType: "SecureString", region: "us-west-2"},
+			stdinValue: "secret",
+			wantErr:    true,
 		},
 		{
-			name:    "secure_string_with_kms",
-			flags:   createFlags{path: "/test/param", value: "test", paramType: "SecureString", kms: "alias/test-key", region: "us-west-2"},
-			wantErr: false,
+			name:       "secure_string_with_kms",
+			flags:      createFlags{path: "/test/param", paramType: "SecureString", kms: "alias/test-key", region: "us-west-2"},
+			stdinValue: "mysecret",
+			wantErr:    false,
+		},
+		{
+			name:       "secure_string_empty_stdin_no_value",
+			flags:      createFlags{path: "/test/param", paramType: "SecureString", kms: "alias/test-key", region: "us-west-2"},
+			stdinValue: "",
+			wantErr:    true,
+		},
+		{
+			name:       "value_with_spaces_preserved",
+			flags:      createFlags{path: "/test/param", region: "us-west-2"},
+			stdinValue: "  value with spaces  ",
+			wantErr:    false,
 		},
 	}
 
@@ -101,6 +126,24 @@ func TestRunCreate(t *testing.T) {
 				},
 			}
 			ts.setupMockClient(mockClient)
+
+			oldStdin := os.Stdin
+			if tt.flags.value == "" {
+				r, w, err := os.Pipe()
+				if err != nil {
+					t.Fatalf("Failed to create pipe: %v", err)
+				}
+				if tt.stdinValue != "" {
+					if _, err := w.WriteString(tt.stdinValue + "\n"); err != nil {
+						t.Fatalf("Failed to write to pipe: %v", err)
+					}
+				}
+				if err := w.Close(); err != nil {
+					t.Fatalf("Failed to close pipe: %v", err)
+				}
+				os.Stdin = r
+			}
+			defer func() { os.Stdin = oldStdin }()
 
 			setupCreateFlags()
 			testRoot.AddCommand(createCmd)
@@ -356,5 +399,163 @@ func TestGetReplicaKMSKeyID(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReadValueFromStdin(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantValue string
+		wantErr   bool
+	}{
+		{
+			name:      "simple value",
+			input:     "mysecret\n",
+			wantValue: "mysecret",
+			wantErr:   false,
+		},
+		{
+			name:      "value with spaces preserved",
+			input:     "my secret value\n",
+			wantValue: "my secret value",
+			wantErr:   false,
+		},
+		{
+			name:      "empty value",
+			input:     "\n",
+			wantValue: "",
+			wantErr:   true,
+		},
+		{
+			name:      "value without newline",
+			input:     "mysecret",
+			wantValue: "mysecret",
+			wantErr:   false,
+		},
+		{
+			name:      "leading spaces preserved",
+			input:     "  leadingspaces\n",
+			wantValue: "  leadingspaces",
+			wantErr:   false,
+		},
+		{
+			name:      "trailing spaces preserved",
+			input:     "trailingspaces  \n",
+			wantValue: "trailingspaces  ",
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := bytes.NewBufferString(tt.input)
+			value, err := readValueFromReader(reader)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("readValueFromReader() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr && value != tt.wantValue {
+				t.Errorf("readValueFromReader() = %q, want %q", value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func TestReadValueInteractive(t *testing.T) {
+	tests := []struct {
+		name      string
+		paramType string
+		input     string
+		wantValue string
+	}{
+		{
+			name:      "string type from stdin",
+			paramType: "String",
+			input:     "regular-value\n",
+			wantValue: "regular-value",
+		},
+		{
+			name:      "securestring type from stdin",
+			paramType: "SecureString",
+			input:     "secret-value\n",
+			wantValue: "secret-value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("Failed to create pipe: %v", err)
+			}
+			if _, err := w.WriteString(tt.input); err != nil {
+				t.Fatalf("Failed to write to pipe: %v", err)
+			}
+			if err := w.Close(); err != nil {
+				t.Fatalf("Failed to close pipe: %v", err)
+			}
+
+			oldStdin := os.Stdin
+			os.Stdin = r
+			defer func() { os.Stdin = oldStdin }()
+
+			value, err := readValueInteractive(tt.paramType)
+			if err != nil {
+				t.Errorf("readValueInteractive() error = %v", err)
+				return
+			}
+
+			if value != tt.wantValue {
+				t.Errorf("readValueInteractive() = %q, want %q", value, tt.wantValue)
+			}
+		})
+	}
+}
+
+func readValueFromReader(r io.Reader) (string, error) {
+	buf := make([]byte, 4096)
+	n, err := r.Read(buf)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	value := string(buf[:n])
+	if len(value) > 0 && value[len(value)-1] == '\n' {
+		value = value[:len(value)-1]
+	}
+
+	if value == "" {
+		return "", io.EOF
+	}
+
+	return value, nil
+}
+
+func TestExplicitEmptyValueFlag(t *testing.T) {
+	ts := setupTest(t)
+	t.Cleanup(ts.cleanup)
+
+	mockClient := &aws.MockSSMClient{
+		PutParamFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
+			return &ssm.PutParameterOutput{}, nil
+		},
+	}
+	ts.setupMockClient(mockClient)
+
+	setupCreateFlags()
+	testRoot.AddCommand(createCmd)
+
+	// Explicitly pass --value ''
+	testRoot.SetArgs([]string{"create", "--path", "/test/param", "--value", "", "--region", "us-west-2"})
+	err := testRoot.Execute()
+
+	if err == nil {
+		t.Error("expected error for explicit empty value, got nil")
+	}
+	if err != nil && err.Error() != "value cannot be empty" {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
