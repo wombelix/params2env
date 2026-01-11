@@ -69,6 +69,7 @@ upper: true
 env_prefix: HOME_
 role: arn:aws:iam::123:role/home
 kms: alias/myapp-key
+format: env
 params:
   - name: /home/secret
     env: HOME_SECRET
@@ -89,6 +90,7 @@ prefix: /local/params
 env_prefix: LOCAL_
 role: arn:aws:iam::123:role/local
 kms: alias/local-key
+format: github-env
 params:
   - name: /local/secret
     env: LOCAL_SECRET
@@ -120,6 +122,7 @@ params:
 				EnvPrefix: "LOCAL_",                      // From local config
 				Role:      "arn:aws:iam::123:role/local", // From local config
 				KMS:       "alias/local-key",             // From local config
+				Format:    "github-env",                  // From local config
 				Params: []ParamConfig{
 					{
 						Name: "/local/secret",
@@ -255,6 +258,7 @@ func TestMergeConfig(t *testing.T) {
 				EnvPrefix: "GLOBAL_",
 				Role:      "arn:aws:iam::123:role/global",
 				KMS:       "alias/global-key",
+				Format:    "env",
 				Params: []ParamConfig{
 					{Name: "/global/param"},
 				},
@@ -269,6 +273,7 @@ func TestMergeConfig(t *testing.T) {
 				EnvPrefix: "LOCAL_",
 				Role:      "arn:aws:iam::123:role/local",
 				KMS:       "alias/local-key",
+				Format:    "github-env",
 				Params: []ParamConfig{
 					{Name: "/local/param"},
 				},
@@ -283,6 +288,7 @@ func TestMergeConfig(t *testing.T) {
 				EnvPrefix: "LOCAL_",
 				Role:      "arn:aws:iam::123:role/local",
 				KMS:       "alias/local-key",
+				Format:    "github-env",
 				Params: []ParamConfig{
 					{Name: "/local/param"},
 				},
@@ -300,6 +306,7 @@ func TestMergeConfig(t *testing.T) {
 				EnvPrefix: "GLOBAL_",
 				Role:      "arn:aws:iam::123:role/global",
 				KMS:       "alias/global-key",
+				Format:    "env",
 				Params: []ParamConfig{
 					{Name: "/global/param"},
 				},
@@ -315,6 +322,7 @@ func TestMergeConfig(t *testing.T) {
 				EnvPrefix: "GLOBAL_",
 				Role:      "arn:aws:iam::123:role/global",
 				KMS:       "alias/global-key",
+				Format:    "env",
 				Params: []ParamConfig{
 					{Name: "/global/param"},
 				},
@@ -327,6 +335,52 @@ func TestMergeConfig(t *testing.T) {
 			mergeConfig(tt.global, tt.local)
 			if !reflect.DeepEqual(tt.global, tt.want) {
 				t.Errorf("mergeConfig() = %v, want %v", tt.global, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfigFormatValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{
+			name: "valid env format",
+			config: &Config{
+				Format: "env",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid github-env format",
+			config: &Config{
+				Format: "github-env",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty format is valid",
+			config: &Config{
+				Format: "",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid format",
+			config: &Config{
+				Format: "invalid",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Config.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

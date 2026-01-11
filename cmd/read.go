@@ -26,6 +26,7 @@ var (
 	readUpper   bool
 	readPrefix  string
 	readEnvName string
+	readFormat  string
 )
 
 var readCmd = &cobra.Command{
@@ -36,12 +37,19 @@ var readCmd = &cobra.Command{
 The parameter value will be printed to stdout in the format:
 export PARAM="value"
 
+Output formats:
+  env (default): export KEY="value" - for shell sourcing
+  github-env:    KEY=value - for GitHub Actions with automatic masking
+
 Examples:
   # Read a single parameter
   params2env read --path /myapp/config/url
 
   # Read a parameter and write to a file
   params2env read --path /myapp/config/url --file /etc/env.d/myapp
+
+  # GitHub Actions format (auto-detects $GITHUB_ENV)
+  params2env read --path /myapp/secret --format github-env
 
   # Read a parameter with custom environment variable name
   params2env read --path /myapp/config/url --env MY_URL
@@ -76,6 +84,24 @@ func validateReadFlags(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if readFormat != "env" && readFormat != "github-env" {
+		return fmt.Errorf("invalid format %q (must be 'env' or 'github-env')", readFormat)
+	}
+
+	effectiveFormat := readFormat
+	if readFormat == "env" && cfg != nil && cfg.Format != "" {
+		effectiveFormat = cfg.Format
+	}
+
+	effectiveFile := readFile
+	if readFile == "" && cfg != nil && cfg.File != "" {
+		effectiveFile = cfg.File
+	}
+
+	if effectiveFormat == "github-env" && effectiveFile == "" && os.Getenv("GITHUB_ENV") == "" {
+		return fmt.Errorf("github-env format requires --file or GITHUB_ENV environment variable")
+	}
+
 	return nil
 }
 
@@ -93,11 +119,20 @@ func runRead(cmd *cobra.Command, args []string) error {
 }
 
 func handleConfigParameters(cfg *config.Config) error {
+	if readFormat == "env" && cfg.Format != "" {
+		readFormat = cfg.Format
+	}
+
 	var outputs []string
 	for _, param := range cfg.Params {
 		value, err := getParameterValue(param.Name, param.Region, cfg.Region)
 		if err != nil {
 			return err
+		}
+
+		// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
+		if readFormat == "github-env" {
+			fmt.Printf("::add-mask::%s\n", value)
 		}
 
 		name := formatEnvName(param.Name, param.Env, cfg)
@@ -118,6 +153,11 @@ func handleSingleParameter(cfg *config.Config) error {
 	value, err := getParameterValue(readPath, readRegion, "")
 	if err != nil {
 		return err
+	}
+
+	// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
+	if readFormat == "github-env" {
+		fmt.Printf("::add-mask::%s\n", value)
 	}
 
 	name := formatEnvName(readPath, readEnvName, cfg)
@@ -141,6 +181,9 @@ func mergeReadConfig(cfg *config.Config) {
 	}
 	if readFile == "" {
 		readFile = cfg.File
+	}
+	if readFormat == "env" && cfg.Format != "" {
+		readFormat = cfg.Format
 	}
 	if cfg.Upper != nil && !readUpper {
 		readUpper = *cfg.Upper
@@ -218,8 +261,40 @@ func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 	return name
 }
 
-// Writes to file or stdout. Uses secure permissions (0700 dirs, 0600 files).
 func writeOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
+	if readFormat == "github-env" {
+		return writeGithubEnvOutput(output, params, cfg)
+	}
+	return writeEnvOutput(output, params, cfg)
+}
+
+func writeGithubEnvOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	var fileContent []string
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "export ") {
+			envLine := strings.TrimPrefix(line, "export ")
+			if parts := strings.SplitN(envLine, "=", 2); len(parts) == 2 {
+				key := parts[0]
+				value := strings.Trim(parts[1], "\"'")
+				fileContent = append(fileContent, fmt.Sprintf("%s=%s", key, value))
+			}
+		}
+	}
+
+	outputFile := readFile
+	if outputFile == "" {
+		outputFile = os.Getenv("GITHUB_ENV")
+	}
+
+	if outputFile != "" {
+		return appendToFile(outputFile, strings.Join(fileContent, "\n")+"\n")
+	}
+	return nil
+}
+
+func writeEnvOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
 	if readFile == "" && cfg != nil {
 		readFile = cfg.File
 	}
@@ -234,14 +309,24 @@ func writeOutput(output string, params []config.ParamConfig, cfg *config.Config)
 			fmt.Printf("Reading parameter '%s' from region '%s'\n", param.Name, readRegion)
 		}
 
-		if err := os.WriteFile(readFile, []byte(output), 0600); err != nil {
-			return fmt.Errorf("failed to write to file: %w", err)
-		}
-		fmt.Printf("Parameter value written to %s\n", readFile)
-		return nil
+		return appendToFile(readFile, output)
 	}
 
 	fmt.Print(output)
+	return nil
+}
+
+func appendToFile(filename, content string) error {
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		return fmt.Errorf("failed to write to file: %w", err)
+	}
 	return nil
 }
 
@@ -253,4 +338,5 @@ func init() {
 	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
 }

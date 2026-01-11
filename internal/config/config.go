@@ -28,6 +28,7 @@ type Config struct {
 	EnvPrefix string        `yaml:"env_prefix,omitempty"`
 	Role      string        `yaml:"role,omitempty"`
 	KMS       string        `yaml:"kms,omitempty"`
+	Format    string        `yaml:"format,omitempty"`
 	Params    []ParamConfig `yaml:"params,omitempty"`
 }
 
@@ -47,6 +48,10 @@ func (c *Config) Validate() error {
 
 	if c.Output != "" && c.Output != "env" && c.Output != "file" {
 		return fmt.Errorf("%w: invalid output format %q (must be 'env' or 'file')", ErrInvalidConfig, c.Output)
+	}
+
+	if c.Format != "" && c.Format != "env" && c.Format != "github-env" {
+		return fmt.Errorf("%w: invalid format %q (must be 'env' or 'github-env')", ErrInvalidConfig, c.Format)
 	}
 
 	return nil
@@ -125,6 +130,9 @@ func mergeConfig(global, local *Config) {
 	}
 	if local.KMS != "" {
 		global.KMS = local.KMS
+	}
+	if local.Format != "" {
+		global.Format = local.Format
 	}
 	if local.Upper != nil {
 		global.Upper = local.Upper

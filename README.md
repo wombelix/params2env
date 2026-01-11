@@ -87,6 +87,7 @@ Global flags:
 * `--path`: Parameter path (required)
 * `--role`: IAM role ARN to assume
 * `--file`: Output file (default: stdout)
+* `--format`: Output format: `env` or `github-env` (default: `env`)
 * `--upper`: Uppercase env var names (default: `true`)
 * `--env-prefix`: Prefix for env var names
 * `--env`: Custom env var name (overrides auto-generated name)
@@ -104,6 +105,29 @@ With `--upper` (enabled by default), it gets uppercased.
 
 Use `--env` to set a fully custom name when auto-generation doesn't fit.
 
+**Output formats:**
+
+* `env` (default): `export KEY="value"` - for shell sourcing
+* `github-env`: `KEY=value` - for GitHub Actions with automatic masking
+
+**GitHub Actions usage:**
+
+The `github-env` format automatically:
+
+* Outputs masking commands (`::add-mask::value`) to stdout
+* Append `KEY=value` format to `$GITHUB_ENV` file
+
+```bash
+# GitHub Actions workflow
+- name: Load secrets
+  run: |
+    params2env read --path "/app/db-password" --format github-env
+    # Automatically writes to $GITHUB_ENV and masks the value
+
+# Manual file specification
+params2env read --path "/app/secret" --format github-env --file secrets.env
+```
+
 Example:
 
 ```bash
@@ -111,6 +135,12 @@ params2env read --region "eu-central-1" --path "/my/secret" \
   --role "arn:aws:iam::111122223333:role/my-role" \
   --file "~/.my-secret" --upper "false" \
   --env-prefix "my_" --env "secret"
+
+# GitHub Actions format
+params2env read --path "/app/db-password" --format github-env
+
+# Traditional shell format
+params2env read --path "/app/config" --format env
 ```
 
 Result in `~/.my-secret`:
@@ -226,6 +256,7 @@ region: <aws region>
 replica: <replica region>
 prefix: <search path prefix>
 file: <output file>
+format: <output format: env or github-env>
 upper: <uppercase env names, default true>
 env_prefix: <env var prefix>
 role: <iam role to assume>
@@ -245,6 +276,7 @@ params:
 | `replica` | ✓ | ✓ | ✓ | - |
 | `role` | ✓ | ✓ | ✓ | ✓ |
 | `kms` | ✓ | - | - | - |
+| `format` | - | - | - | ✓ |
 | `env_prefix` | - | - | - | ✓ |
 | `file` | - | - | - | ✓ |
 | `upper` | - | - | - | ✓ |
@@ -293,6 +325,7 @@ params2env delete --path /app/secret
 region: eu-central-1
 role: arn:aws:iam::123456789012:role/my-role
 env_prefix: APP
+format: github-env
 upper: true
 params:
   - name: /app/db_password              # → APP_DB_PASSWORD (auto)
@@ -304,8 +337,9 @@ params:
 ```
 
 ```bash
-params2env read                       # Read all from config
-params2env read --file ~/.env         # Write to file
+params2env read                       # Read all from config (github-env format)
+params2env read --file ~/.env         # Write to file (github-env format)
+params2env read --format env          # Override to traditional shell format
 params2env read --path /custom/param  # Single param (ignores params list)
 ```
 

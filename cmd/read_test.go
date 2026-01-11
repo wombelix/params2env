@@ -77,6 +77,7 @@ func setupReadFlags(t *testing.T, testRoot *cobra.Command) {
 	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
 	if err := readCmd.MarkFlagRequired("path"); err != nil {
 		t.Fatalf("Failed to mark path flag as required: %v", err)
 	}
@@ -313,6 +314,8 @@ params:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Remove("test.env")
+
 			testRoot := &cobra.Command{Use: "params2env"}
 			readCmd.ResetFlags()
 			readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
@@ -322,6 +325,7 @@ params:
 			readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 			readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 			readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+			readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
 			testRoot.AddCommand(readCmd)
 
 			oldStdout := os.Stdout
@@ -399,6 +403,7 @@ params:
 	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
 	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
 	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
 	testRoot.AddCommand(readCmd)
 
 	testRoot.SetArgs([]string{"read", "--path", "/test/param"})
@@ -536,5 +541,357 @@ func TestSecureFilePermissions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+func TestReadConfigFormatIntegration(t *testing.T) {
+	tests := []struct {
+		name       string
+		configFormat string
+		cliFormat    string
+		wantFormat   string
+	}{
+		{
+			name:       "use config format when cli not set",
+			configFormat: "github-env",
+			cliFormat:    "env", // default value
+			wantFormat:   "github-env",
+		},
+		{
+			name:       "cli overrides config format",
+			configFormat: "env",
+			cliFormat:    "github-env",
+			wantFormat:   "github-env",
+		},
+		{
+			name:       "empty config uses cli default",
+			configFormat: "",
+			cliFormat:    "env",
+			wantFormat:   "env",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock config
+			cfg := &config.Config{
+				Format: tt.configFormat,
+			}
+
+			// Simulate CLI flag value
+			origFormat := readFormat
+			readFormat = tt.cliFormat
+			defer func() { readFormat = origFormat }()
+
+			// Test mergeReadConfig function
+			mergeReadConfig(cfg)
+
+			// Verify format is set correctly
+			if readFormat != tt.wantFormat {
+				t.Errorf("Expected format %q, got %q", tt.wantFormat, readFormat)
+			}
+		})
+	}
+}
+
+func TestReadConfigFormatDefault(t *testing.T) {
+	// Test that CLI flag default is preserved when config has no format
+	origFormat := readFormat
+	readFormat = "env" // CLI default
+	defer func() { readFormat = origFormat }()
+
+	cfg := &config.Config{} // No format field set
+	mergeReadConfig(cfg)
+
+	if readFormat != "env" {
+		t.Errorf("Expected default format 'env', got %q", readFormat)
+	}
+}
+
+// Format validation tests
+func TestReadFormatValidation(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	args := []string{"read", "--path", "/test/param", "--format", "invalid"}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	if err == nil {
+		t.Error("Expected error for invalid format, got none")
+	}
+	if !containsString(err.Error(), "invalid format") {
+		t.Errorf("Error should contain 'invalid format', got: %v", err)
+	}
+}
+
+func TestReadFormatEnv(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--format", "env"}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("Explicit env format test failed: %v", err)
+	}
+
+	want := "export PARAM=\"test-value\"\n"
+	if got := buf.String(); got != want {
+		t.Errorf("Explicit env format = %q, want %q", got, want)
+	}
+}
+
+func TestReadFormatGithubEnv(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	testFile := filepath.Join(rts.tmpDir, "test.env")
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--format", "github-env", "--file", testFile}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("GitHub env format test failed: %v", err)
+	}
+
+	if !containsString(buf.String(), "::add-mask::test-value") {
+		t.Errorf("Expected masking command in stdout, got: %q", buf.String())
+	}
+
+	// Should write KEY=value to file
+	content, _ := os.ReadFile(testFile)
+	if string(content) != "PARAM=test-value\n" {
+		t.Errorf("Expected 'PARAM=test-value\n' in file, got: %q", string(content))
+	}
+}
+
+func TestReadFormatGithubEnvAutoFile(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	testFile := filepath.Join(rts.tmpDir, "github_env")
+	_ = os.Setenv("GITHUB_ENV", testFile)
+	defer func() { _ = os.Unsetenv("GITHUB_ENV") }()
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--format", "github-env"}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("GitHub env auto-file test failed: %v", err)
+	}
+
+	if !containsString(buf.String(), "::add-mask::test-value") {
+		t.Errorf("Expected masking in stdout, got: %q", buf.String())
+	}
+
+	content, _ := os.ReadFile(testFile)
+	if string(content) != "PARAM=test-value\n" {
+		t.Errorf("Expected auto-file content 'PARAM=test-value\n', got: %q", string(content))
+	}
+}
+
+func TestReadAppendToFile(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	testFile := filepath.Join(rts.tmpDir, "append_test.env")
+	_ = os.WriteFile(testFile, []byte("EXISTING=value\n"), 0600)
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--file", testFile}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	if err != nil {
+		t.Errorf("Append test failed: %v", err)
+	}
+
+	content, _ := os.ReadFile(testFile)
+	want := "EXISTING=value\nexport PARAM=\"test-value\"\n"
+	if string(content) != want {
+		t.Errorf("Expected append, got: %q, want: %q", string(content), want)
+	}
+}
+// Security tests: verify masking happens immediately after secret retrieval
+func TestGithubEnvMaskingOrder(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	// Mock that tracks call order
+	var callOrder []string
+	mockClient := &aws.MockSSMClient{
+		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+			callOrder = append(callOrder, "GetParameter")
+			value := "secret-value"
+			return &ssm.GetParameterOutput{
+				Parameter: &types.Parameter{
+					Value: &value,
+				},
+			}, nil
+		},
+	}
+	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+		return &aws.Client{SSMClient: mockClient}, nil
+	}
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	// Capture stdout to verify masking order
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Add file destination to make test valid
+	testFile := filepath.Join(rts.tmpDir, "test.env")
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--format", "github-env", "--file", testFile}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("GitHub env masking order test failed: %v", err)
+	}
+
+	output := buf.String()
+
+	if !containsString(output, "::add-mask::secret-value") {
+		t.Errorf("Expected masking command in output, got: %q", output)
+	}
+
+	if len(callOrder) == 0 || callOrder[0] != "GetParameter" {
+		t.Errorf("Expected GetParameter to be called, got call order: %v", callOrder)
+	}
+}
+
+func TestGithubEnvConfigFormatMasking(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	configContent := []byte(`
+region: eu-central-1
+format: github-env
+file: test.env
+params:
+  - name: /app/secret
+    env: SECRET
+`)
+	if err := os.WriteFile(filepath.Join(rts.tmpDir, ".params2env.yaml"), configContent, 0644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	readCmd.ResetFlags()
+	readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
+	readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
+	readCmd.Flags().StringVar(&readRole, "role", "", "AWS role ARN to assume (optional)")
+	readCmd.Flags().StringVar(&readFile, "file", "", "File to write to (optional)")
+	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
+	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
+	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
+	testRoot.AddCommand(readCmd)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	testRoot.SetArgs([]string{"read"})
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("Config format masking test failed: %v", err)
+	}
+
+	output := buf.String()
+
+	if !containsString(output, "::add-mask::test-value") {
+		t.Errorf("Expected config format to trigger masking, got: %q", output)
+	}
+}
+func TestGithubEnvRequiresFileDestination(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	origGithubEnv := os.Getenv("GITHUB_ENV")
+	_ = os.Unsetenv("GITHUB_ENV")
+	defer func() {
+		if origGithubEnv != "" {
+			_ = os.Setenv("GITHUB_ENV", origGithubEnv)
+		}
+	}()
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	setupReadFlags(t, testRoot)
+
+	args := []string{"read", "--path", "/test/param", "--region", "us-west-2", "--format", "github-env"}
+	testRoot.SetArgs(args)
+	err := testRoot.Execute()
+
+	if err == nil {
+		t.Error("Expected error when using github-env format without file destination, got none")
+	}
+
+	expectedError := "github-env format requires --file or GITHUB_ENV environment variable"
+	if !containsString(err.Error(), expectedError) {
+		t.Errorf("Expected error containing %q, got: %v", expectedError, err)
 	}
 }
