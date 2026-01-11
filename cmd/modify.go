@@ -127,14 +127,12 @@ func readModifyValueInteractive() (string, error) {
 	}
 
 	fmt.Fprint(os.Stderr, "Enter parameter value: ")
-	reader := bufio.NewReader(os.Stdin)
-	value, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	value, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
 		return "", fmt.Errorf("failed to read value: %w", err)
 	}
-	value = strings.TrimSuffix(value, "\n")
-	value = strings.TrimSuffix(value, "\r")
-	return value, nil
+	return string(value), nil
 }
 
 func readModifyFromStdin() (string, error) {
