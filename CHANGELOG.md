@@ -1,3 +1,9 @@
+## v0.4.0 (2026-01-11)
+
+### Feat
+
+- new --format flag and github-env support
+
 ## v0.3.0 (2026-01-01)
 
 ### Feat
