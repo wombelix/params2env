@@ -17,7 +17,14 @@ import (
 func setupExecuteTest(t *testing.T) func() {
 	origOsExit := osExit
 	origRegion := os.Getenv("AWS_REGION")
-	os.Setenv("AWS_REGION", "eu-central-1")
+	origHome := os.Getenv("HOME")
+	tmpDir, err := os.MkdirTemp("", "params2env-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	_ = os.Setenv("AWS_REGION", "eu-central-1")
+	_ = os.Setenv("HOME", tmpDir)
 
 	var exitCode int
 	osExit = func(code int) {
@@ -50,6 +57,8 @@ func setupExecuteTest(t *testing.T) func() {
 	return func() {
 		osExit = origOsExit
 		_ = os.Setenv("AWS_REGION", origRegion)
+		_ = os.Setenv("HOME", origHome)
+		_ = os.RemoveAll(tmpDir)
 		aws.NewClient = origNewClient
 	}
 }
@@ -59,6 +68,15 @@ func setupRootCmd() {
 	rootCmd.ResetCommands()
 	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
 	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
+
+	readPath = ""
+	readRegion = ""
+	readRole = ""
+	readFile = ""
+	readUpper = true
+	readPrefix = ""
+	readEnvName = ""
+	readFormat = "env"
 
 	modifyPath = ""
 	modifyValue = ""
