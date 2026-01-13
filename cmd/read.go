@@ -19,14 +19,15 @@ import (
 )
 
 var (
-	readPath    string
-	readRegion  string
-	readRole    string
-	readFile    string
-	readUpper   bool
-	readPrefix  string
-	readEnvName string
-	readFormat  string
+	readPath              string
+	readRegion            string
+	readRole              string
+	readFile              string
+	readUpper             bool
+	readPrefix            string
+	readEnvName           string
+	readFormat            string
+	readFormatExplicitSet bool
 )
 
 var readCmd = &cobra.Command{
@@ -88,8 +89,10 @@ func validateReadFlags(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid format %q (must be 'env' or 'github-env')", readFormat)
 	}
 
+	readFormatExplicitSet = cmd.Flags().Changed("format")
+
 	effectiveFormat := readFormat
-	if readFormat == "env" && cfg != nil && cfg.Format != "" {
+	if !readFormatExplicitSet && cfg != nil && cfg.Format != "" {
 		effectiveFormat = cfg.Format
 	}
 
@@ -119,7 +122,7 @@ func runRead(cmd *cobra.Command, args []string) error {
 }
 
 func handleConfigParameters(cfg *config.Config) error {
-	if readFormat == "env" && cfg.Format != "" {
+	if !readFormatExplicitSet && cfg.Format != "" {
 		readFormat = cfg.Format
 	}
 
@@ -182,7 +185,7 @@ func mergeReadConfig(cfg *config.Config) {
 	if readFile == "" {
 		readFile = cfg.File
 	}
-	if readFormat == "env" && cfg.Format != "" {
+	if !readFormatExplicitSet && cfg.Format != "" {
 		readFormat = cfg.Format
 	}
 	if cfg.Upper != nil && !readUpper {

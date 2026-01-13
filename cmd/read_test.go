@@ -545,28 +545,32 @@ func TestSecureFilePermissions(t *testing.T) {
 }
 func TestReadConfigFormatIntegration(t *testing.T) {
 	tests := []struct {
-		name       string
-		configFormat string
-		cliFormat    string
-		wantFormat   string
+		name              string
+		configFormat      string
+		cliFormat         string
+		formatExplicitSet bool
+		wantFormat        string
 	}{
 		{
-			name:       "use config format when cli not set",
-			configFormat: "github-env",
-			cliFormat:    "env", // default value
-			wantFormat:   "github-env",
+			name:              "use config format when cli not set",
+			configFormat:      "github-env",
+			cliFormat:         "env", // default value
+			formatExplicitSet: false,
+			wantFormat:        "github-env",
 		},
 		{
-			name:       "cli overrides config format",
-			configFormat: "env",
-			cliFormat:    "github-env",
-			wantFormat:   "github-env",
+			name:              "cli overrides config format",
+			configFormat:      "env",
+			cliFormat:         "github-env",
+			formatExplicitSet: true,
+			wantFormat:        "github-env",
 		},
 		{
-			name:       "empty config uses cli default",
-			configFormat: "",
-			cliFormat:    "env",
-			wantFormat:   "env",
+			name:              "empty config uses cli default",
+			configFormat:      "",
+			cliFormat:         "env",
+			formatExplicitSet: false,
+			wantFormat:        "env",
 		},
 	}
 
@@ -577,10 +581,15 @@ func TestReadConfigFormatIntegration(t *testing.T) {
 				Format: tt.configFormat,
 			}
 
-			// Simulate CLI flag value
+			// Simulate CLI flag value and explicit set state
 			origFormat := readFormat
+			origExplicitSet := readFormatExplicitSet
 			readFormat = tt.cliFormat
-			defer func() { readFormat = origFormat }()
+			readFormatExplicitSet = tt.formatExplicitSet
+			defer func() {
+				readFormat = origFormat
+				readFormatExplicitSet = origExplicitSet
+			}()
 
 			// Test mergeReadConfig function
 			mergeReadConfig(cfg)
@@ -867,6 +876,79 @@ params:
 		t.Errorf("Expected config format to trigger masking, got: %q", output)
 	}
 }
+
+func TestExplicitFormatEnvOverridesConfigGithubEnv(t *testing.T) {
+	rts := setupReadTest(t)
+	defer rts.cleanup()
+
+	// Config has format: github-env and file destination
+	testFile := filepath.Join(rts.tmpDir, "test.env")
+	configContent := []byte(`
+region: eu-central-1
+format: github-env
+file: ` + testFile + `
+params:
+  - name: /app/secret
+    env: SECRET
+`)
+	if err := os.WriteFile(filepath.Join(rts.tmpDir, ".params2env.yaml"), configContent, 0644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	testRoot := &cobra.Command{Use: "params2env"}
+	readCmd.ResetFlags()
+	readCmd.Flags().StringVar(&readPath, "path", "", "Parameter path (required if no parameters defined in config)")
+	readCmd.Flags().StringVar(&readRegion, "region", "", "AWS region (optional)")
+	readCmd.Flags().StringVar(&readRole, "role", "", "AWS role ARN to assume (optional)")
+	readCmd.Flags().StringVar(&readFile, "file", "", "File to write to (optional)")
+	readCmd.Flags().BoolVar(&readUpper, "upper", true, "Convert env var name to uppercase")
+	readCmd.Flags().StringVar(&readPrefix, "env-prefix", "", "Prefix for env var name")
+	readCmd.Flags().StringVar(&readEnvName, "env", "", "Environment variable name")
+	readCmd.Flags().StringVar(&readFormat, "format", "env", "Output format: 'env' or 'github-env'")
+	testRoot.AddCommand(readCmd)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Explicit --format env should override config's github-env
+	testRoot.SetArgs([]string{"read", "--format", "env"})
+	err := testRoot.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	if err != nil {
+		t.Errorf("Explicit format env override test failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Should NOT have ::add-mask:: since we explicitly requested env format
+	if containsString(output, "::add-mask::") {
+		t.Errorf("Explicit --format env should NOT produce ::add-mask::, got: %q", output)
+	}
+
+	// File should contain export format, not github-env format
+	content, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	// env format uses: export KEY="value"
+	if !containsString(string(content), "export SECRET=") {
+		t.Errorf("File should contain 'export SECRET=' format, got: %q", string(content))
+	}
+
+	// Should NOT be github-env format (KEY=value without export)
+	if string(content) == "SECRET=test-value\n" {
+		t.Errorf("File should NOT be github-env format, got: %q", string(content))
+	}
+}
+
 func TestGithubEnvRequiresFileDestination(t *testing.T) {
 	rts := setupReadTest(t)
 	defer rts.cleanup()
