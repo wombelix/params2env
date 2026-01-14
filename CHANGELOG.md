@@ -1,3 +1,10 @@
+## v0.4.1 (2026-01-14)
+
+### Fix
+
+- **read**: wrong precedence of config over cli arg
+- **modify**: Read values as Password without echo to shell
+
 ## v0.4.0 (2026-01-11)
 
 ### Feat
