@@ -1,3 +1,14 @@
+## v0.5.0 (2026-01-17)
+
+### Feat
+
+- **read**: Support multi-line values for env and github-env
+
+### Fix
+
+- **read**: Additional new line after GITHUB_ENV multi-line value
+- **read**: Per line add-mask output inclusive test coverage
+
 ## v0.4.1 (2026-01-14)
 
 ### Fix
