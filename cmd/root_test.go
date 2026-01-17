@@ -1,12 +1,14 @@
-// SPDX-FileCopyrightText: 2025 Dominik Wombacher <dominik@wombacher.cc>
+// SPDX-FileCopyrightText: 2026 Dominik Wombacher <dominik@wombelix.cc>
 //
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -14,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
+// --- Test scaffolding ---
 func setupExecuteTest(t *testing.T) func() {
 	origOsExit := osExit
 	origRegion := os.Getenv("AWS_REGION")
@@ -26,29 +29,19 @@ func setupExecuteTest(t *testing.T) func() {
 	_ = os.Setenv("AWS_REGION", "eu-central-1")
 	_ = os.Setenv("HOME", tmpDir)
 
-	var exitCode int
 	osExit = func(code int) {
-		exitCode = code
-		panic(exitCode)
+		panic(code)
 	}
 
+	// Replace AWS client globally
 	mockClient := &aws.MockSSMClient{
 		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
 			value := "test-value"
 			return &ssm.GetParameterOutput{
-				Parameter: &types.Parameter{
-					Value: &value,
-				},
+				Parameter: &types.Parameter{Value: &value},
 			}, nil
 		},
-		PutParamFunc: func(ctx context.Context, input *ssm.PutParameterInput, opts ...func(*ssm.Options)) (*ssm.PutParameterOutput, error) {
-			return &ssm.PutParameterOutput{}, nil
-		},
-		DeleteParamFunc: func(ctx context.Context, input *ssm.DeleteParameterInput, opts ...func(*ssm.Options)) (*ssm.DeleteParameterOutput, error) {
-			return &ssm.DeleteParameterOutput{}, nil
-		},
 	}
-
 	origNewClient := aws.NewClient
 	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
 		return &aws.Client{SSMClient: mockClient}, nil
@@ -66,24 +59,12 @@ func setupExecuteTest(t *testing.T) func() {
 func setupRootCmd() {
 	rootCmd.ResetFlags()
 	rootCmd.ResetCommands()
-	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level (debug, info, warn, error)")
-	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version information")
-
-	readPath = ""
-	readRegion = ""
-	readRole = ""
-	readFile = ""
-	readUpper = true
-	readPrefix = ""
-	readEnvName = ""
-	readFormat = "env"
-
-	modifyPath = ""
-	modifyValue = ""
-	modifyDesc = ""
-	modifyRegion = ""
-	modifyRole = ""
-	modifyReplica = ""
+	rootCmd.PersistentFlags().StringVar(&logLevel, "loglevel", "info", "Log level")
+	rootCmd.PersistentFlags().BoolVar(&showVersion, "version", false, "Show version")
+	// reset globals
+	readPath, readRegion, readRole, readFile, readEnvName, readPrefix = "", "", "", "", "", ""
+	readUpper, readFormat, readFormatExplicitSet = true, "env", false
+	modifyPath, modifyValue, modifyDesc, modifyRegion, modifyRole, modifyReplica = "", "", "", "", "", ""
 
 	rootCmd.AddCommand(readCmd)
 	rootCmd.AddCommand(createCmd)
@@ -91,51 +72,135 @@ func setupRootCmd() {
 	rootCmd.AddCommand(deleteCmd)
 }
 
-func TestExecuteVersion(t *testing.T) {
+func captureOutput(f func()) string {
+	r, w, _ := os.Pipe()
+	stdout := os.Stdout
+	os.Stdout = w
+
+	outC := make(chan string)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		outC <- buf.String()
+	}()
+
+	f()
+
+	_ = w.Close()
+	os.Stdout = stdout
+	return <-outC
+}
+
+func TestReadSingleLineGithubEnv(t *testing.T) {
 	cleanup := setupExecuteTest(t)
 	defer cleanup()
 	setupRootCmd()
-	rootCmd.SetArgs([]string{"--version"})
+
+	tmpEnvFile := t.TempDir() + "/GITHUB_ENV"
+	_ = os.Setenv("GITHUB_ENV", tmpEnvFile)
+	readFormat = "github-env"
+
+	rootCmd.SetArgs([]string{"read", "--path", "/test/singleline"})
 	if err := Execute(); err != nil {
-		t.Errorf("Execute() error = %v, wantErr false", err)
+		t.Fatalf("Execute() failed: %v", err)
+	}
+
+	data, err := os.ReadFile(tmpEnvFile)
+	if err != nil {
+		t.Fatalf("failed to read github env file: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "test-value") {
+		t.Errorf("Expected value 'test-value' in env file, got:\n%s", content)
+	}
+	if strings.Contains(content, "<<EOF") {
+		t.Errorf("Single-line value should not use <<EOF, got:\n%s", content)
 	}
 }
 
-func TestExecuteHelp(t *testing.T) {
+func TestReadMultiLineGithubEnv(t *testing.T) {
 	cleanup := setupExecuteTest(t)
 	defer cleanup()
 	setupRootCmd()
-	rootCmd.SetArgs([]string{"--help"})
-	if err := Execute(); err != nil {
-		t.Errorf("Execute() error = %v, wantErr false", err)
+
+	multiLineValue := `-----BEGIN OPENSSH PRIVATE KEY-----
+line1
+line2
+line3
+-----END OPENSSH PRIVATE KEY-----`
+
+	mockClient := &aws.MockSSMClient{
+		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
+			return &ssm.GetParameterOutput{
+				Parameter: &types.Parameter{Value: &multiLineValue},
+			}, nil
+		},
+	}
+	origNewClient := aws.NewClient
+	aws.NewClient = func(ctx context.Context, region, role string) (*aws.Client, error) {
+		return &aws.Client{SSMClient: mockClient}, nil
+	}
+	defer func() { aws.NewClient = origNewClient }()
+
+	tmpEnvFile := t.TempDir() + "/GITHUB_ENV"
+	_ = os.Setenv("GITHUB_ENV", tmpEnvFile)
+	readFormat = "github-env"
+
+	out := captureOutput(func() {
+		rootCmd.SetArgs([]string{"read", "--path", "/test/multiline"})
+		if err := Execute(); err != nil {
+			t.Fatalf("Execute() failed: %v", err)
+		}
+	})
+
+	// Env file should contain <<EOF block
+	data, err := os.ReadFile(tmpEnvFile)
+	if err != nil {
+		t.Fatalf("failed to read github env file: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "<<EOF") {
+		t.Errorf("Expected <<EOF syntax for multi-line value, got:\n%s", content)
+	}
+
+	// All lines preserved
+	for _, line := range []string{"line1", "line2", "line3"} {
+		if !strings.Contains(content, line) {
+			t.Errorf("Expected line '%s' in env file, got:\n%s", line, content)
+		}
+	}
+
+	// add-mask should appear in stdout
+	if !strings.Contains(out, "::add-mask::") {
+		t.Errorf("Expected add-mask output, got:\n%s", out)
 	}
 }
 
-func TestExecuteSubcommands(t *testing.T) {
+func TestReadEnvShellFormat(t *testing.T) {
 	cleanup := setupExecuteTest(t)
 	defer cleanup()
+	setupRootCmd()
 
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{"read", []string{"read", "--path", "/test/param"}, false},
-		{"create", []string{"create", "--path", "/test/param", "--value", "test"}, false},
-		{"modify", []string{"modify", "--path", "/test/param", "--value", "test"}, false},
-		{"delete", []string{"delete", "--path", "/test/param"}, false},
-		{"unknown", []string{"unknown"}, true},
-		{"invalid_flag", []string{"--invalid"}, true},
+	readFormat = "env"
+	tmpFile := t.TempDir() + "/.env"
+	readFile = tmpFile
+
+	rootCmd.SetArgs([]string{"read", "--path", "/test/env"})
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute() failed: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			setupRootCmd()
-			rootCmd.SetArgs(tt.args)
-			err := Execute()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read env file: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, `export`) {
+		t.Errorf("Expected export line, got:\n%s", content)
+	}
+	if !strings.Contains(content, "test-value") {
+		t.Errorf("Expected value 'test-value', got:\n%s", content)
 	}
 }

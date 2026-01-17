@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -280,8 +281,24 @@ func writeGithubEnvOutput(output string, params []config.ParamConfig, cfg *confi
 			envLine := strings.TrimPrefix(line, "export ")
 			if parts := strings.SplitN(envLine, "=", 2); len(parts) == 2 {
 				key := parts[0]
-				value := strings.Trim(parts[1], "\"'")
-				fileContent = append(fileContent, fmt.Sprintf("%s=%s", key, value))
+				// The value is Go-quoted (from %q), so unquote it to get the original value
+				// with actual newlines instead of escaped \n sequences
+				value, err := strconv.Unquote(parts[1])
+				if err != nil {
+					// Fallback: just trim quotes if unquoting fails
+					value = strings.Trim(parts[1], "\"'")
+				}
+				if strings.Contains(value, "\n") {
+					// Multi-line value: use official GitHub EOF syntax
+					fileContent = append(fileContent,
+						fmt.Sprintf("%s<<EOF\n%s\nEOF", key, value),
+					)
+				} else {
+					// Single-line value: normal KEY=value
+					fileContent = append(fileContent,
+						fmt.Sprintf("%s=%s", key, value),
+					)
+				}
 			}
 		}
 	}
