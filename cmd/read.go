@@ -290,7 +290,7 @@ func writeGithubEnvOutput(outputs []paramOutput, cfg *config.Config) error {
 	for _, out := range outputs {
 		if strings.Contains(out.value, "\n") {
 			// Multi-line value: EOF syntax
-			fileContent = append(fileContent, fmt.Sprintf("%s<<EOF\n%s\nEOF", out.name, out.value))
+			fileContent = append(fileContent, fmt.Sprintf("%s<<EOF\n%sEOF", out.name, out.value))
 		} else {
 			// Single-line value: normal KEY=value
 			fileContent = append(fileContent, fmt.Sprintf("%s=%s", out.name, out.value))
