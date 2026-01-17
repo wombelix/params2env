@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"git.sr.ht/~wombelix/params2env/internal/aws"
@@ -30,6 +29,11 @@ var (
 	readFormat            string
 	readFormatExplicitSet bool
 )
+
+type paramOutput struct {
+	name  string
+	value string
+}
 
 var readCmd = &cobra.Command{
 	Use:   "read",
@@ -127,24 +131,22 @@ func handleConfigParameters(cfg *config.Config) error {
 		readFormat = cfg.Format
 	}
 
-	var outputs []string
+	var outputs []paramOutput
 	for _, param := range cfg.Params {
 		value, err := getParameterValue(param.Name, param.Region, cfg.Region)
 		if err != nil {
 			return err
 		}
 
-		// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
 		if readFormat == "github-env" {
-			fmt.Printf("::add-mask::%s\n", value)
+			maskValue(value)
 		}
 
 		name := formatEnvName(param.Name, param.Env, cfg)
-		outputs = append(outputs, fmt.Sprintf("export %s=%q", name, value))
+		outputs = append(outputs, paramOutput{name: name, value: value})
 	}
 
-	output := strings.Join(outputs, "\n") + "\n"
-	return writeOutput(output, cfg.Params, cfg)
+	return writeOutput(outputs, cfg.Params, cfg)
 }
 
 func handleSingleParameter(cfg *config.Config) error {
@@ -159,15 +161,25 @@ func handleSingleParameter(cfg *config.Config) error {
 		return err
 	}
 
-	// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
 	if readFormat == "github-env" {
-		fmt.Printf("::add-mask::%s\n", value)
+		maskValue(value)
 	}
 
 	name := formatEnvName(readPath, readEnvName, cfg)
-	output := fmt.Sprintf("export %s=%q\n", name, value)
+	outputs := []paramOutput{{name: name, value: value}}
 
-	return writeOutput(output, []config.ParamConfig{{Name: readPath}}, cfg)
+	return writeOutput(outputs, []config.ParamConfig{{Name: readPath}}, cfg)
+}
+
+// maskValue prints ::add-mask:: commands for GitHub Actions.
+// For multi-line values, each line is masked separately.
+// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#masking-a-value-in-a-log
+func maskValue(value string) {
+	for _, line := range strings.Split(value, "\n") {
+		if line != "" {
+			fmt.Printf("::add-mask::%s\n", line)
+		}
+	}
 }
 
 func mergeReadConfig(cfg *config.Config) {
@@ -265,41 +277,23 @@ func formatEnvName(paramPath, envName string, cfg *config.Config) string {
 	return name
 }
 
-func writeOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
+func writeOutput(outputs []paramOutput, params []config.ParamConfig, cfg *config.Config) error {
 	if readFormat == "github-env" {
-		return writeGithubEnvOutput(output, params, cfg)
+		return writeGithubEnvOutput(outputs, cfg)
 	}
-	return writeEnvOutput(output, params, cfg)
+	return writeEnvOutput(outputs, params, cfg)
 }
 
-func writeGithubEnvOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+func writeGithubEnvOutput(outputs []paramOutput, cfg *config.Config) error {
 	var fileContent []string
 
-	for _, line := range lines {
-		if strings.HasPrefix(line, "export ") {
-			envLine := strings.TrimPrefix(line, "export ")
-			if parts := strings.SplitN(envLine, "=", 2); len(parts) == 2 {
-				key := parts[0]
-				// The value is Go-quoted (from %q), so unquote it to get the original value
-				// with actual newlines instead of escaped \n sequences
-				value, err := strconv.Unquote(parts[1])
-				if err != nil {
-					// Fallback: just trim quotes if unquoting fails
-					value = strings.Trim(parts[1], "\"'")
-				}
-				if strings.Contains(value, "\n") {
-					// Multi-line value: use official GitHub EOF syntax
-					fileContent = append(fileContent,
-						fmt.Sprintf("%s<<EOF\n%s\nEOF", key, value),
-					)
-				} else {
-					// Single-line value: normal KEY=value
-					fileContent = append(fileContent,
-						fmt.Sprintf("%s=%s", key, value),
-					)
-				}
-			}
+	for _, out := range outputs {
+		if strings.Contains(out.value, "\n") {
+			// Multi-line value: EOF syntax
+			fileContent = append(fileContent, fmt.Sprintf("%s<<EOF\n%s\nEOF", out.name, out.value))
+		} else {
+			// Single-line value: normal KEY=value
+			fileContent = append(fileContent, fmt.Sprintf("%s=%s", out.name, out.value))
 		}
 	}
 
@@ -314,10 +308,17 @@ func writeGithubEnvOutput(output string, params []config.ParamConfig, cfg *confi
 	return nil
 }
 
-func writeEnvOutput(output string, params []config.ParamConfig, cfg *config.Config) error {
+func writeEnvOutput(outputs []paramOutput, params []config.ParamConfig, cfg *config.Config) error {
 	if readFile == "" && cfg != nil {
 		readFile = cfg.File
 	}
+
+	// Build output in shell export format
+	var lines []string
+	for _, out := range outputs {
+		lines = append(lines, fmt.Sprintf("export %s=%q", out.name, out.value))
+	}
+	output := strings.Join(lines, "\n") + "\n"
 
 	if readFile != "" {
 		dir := filepath.Dir(readFile)

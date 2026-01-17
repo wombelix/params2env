@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
-// --- Test scaffolding ---
 func setupExecuteTest(t *testing.T) func() {
 	origOsExit := osExit
 	origRegion := os.Getenv("AWS_REGION")
@@ -124,11 +123,9 @@ func TestReadMultiLineGithubEnv(t *testing.T) {
 	defer cleanup()
 	setupRootCmd()
 
-	multiLineValue := `-----BEGIN OPENSSH PRIVATE KEY-----
-line1
+	multiLineValue := `line1
 line2
-line3
------END OPENSSH PRIVATE KEY-----`
+line3`
 
 	mockClient := &aws.MockSSMClient{
 		GetParamFunc: func(ctx context.Context, input *ssm.GetParameterInput, opts ...func(*ssm.Options)) (*ssm.GetParameterOutput, error) {
@@ -171,9 +168,16 @@ line3
 		}
 	}
 
-	// add-mask should appear in stdout
-	if !strings.Contains(out, "::add-mask::") {
-		t.Errorf("Expected add-mask output, got:\n%s", out)
+	// Each line should be masked separately
+	expectedMasks := []string{
+		"::add-mask::line1",
+		"::add-mask::line2",
+		"::add-mask::line3",
+	}
+	for _, mask := range expectedMasks {
+		if !strings.Contains(out, mask) {
+			t.Errorf("Expected mask %q in output, got:\n%s", mask, out)
+		}
 	}
 }
 

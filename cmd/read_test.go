@@ -498,14 +498,14 @@ func TestSecureFilePermissions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := "export TEST_PARAM=\"secret-value\"\n"
+			outputs := []paramOutput{{name: "TEST_PARAM", value: "secret-value"}}
 			params := []config.ParamConfig{{Name: "/test/param"}}
 
 			origReadFile := readFile
 			readFile = tt.filePath
 			defer func() { readFile = origReadFile }()
 
-			err := writeOutput(output, params, nil)
+			err := writeOutput(outputs, params, nil)
 			if err != nil {
 				t.Fatalf("writeOutput failed: %v", err)
 			}
@@ -514,8 +514,9 @@ func TestSecureFilePermissions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to read created file: %v", err)
 			}
-			if string(content) != output {
-				t.Errorf("File content = %q, want %q", string(content), output)
+			expectedOutput := "export TEST_PARAM=\"secret-value\"\n"
+			if string(content) != expectedOutput {
+				t.Errorf("File content = %q, want %q", string(content), expectedOutput)
 			}
 
 			fileInfo, err := os.Stat(tt.filePath)
