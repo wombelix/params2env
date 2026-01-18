@@ -6,8 +6,11 @@ name: "Test params2env GitHub action"
 
 on:
   release:
-    types: [published]
+    types: [released]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test-install:
@@ -23,6 +26,8 @@ jobs:
 
       - name: Get latest release tag
         id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
             LATEST_TAG=$(GH_PAGER= gh release list --repo wombelix/params2env --limit 1 --json tagName | jq -r '.[0].tagName')
             echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
