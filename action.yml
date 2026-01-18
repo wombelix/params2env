@@ -16,6 +16,8 @@ runs:
   steps:
     - name: Install params2env
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
 
