@@ -13,6 +13,8 @@ SPDX-License-Identifier: Apache-2.0
 ## Table of Contents
 
 * [Installation](#installation)
+   * [GitHub Action](#github-action)
+   * [Go Install](#go-install)
 * [Shell Completion](#shell-completion)
 * [CLI](#cli)
    * [Technical details](#technical-details)
@@ -48,6 +50,27 @@ over home directory.
 Binaries for Linux, macOS, and Windows on
 [GitHub Releases](https://github.com/wombelix/params2env/releases).
 Download and add to PATH.
+
+### GitHub Action
+
+Use the reusable action to install params2env in your workflows (Linux runners only):
+
+```yaml
+- uses: wombelix/params2env@v0.5.0
+```
+
+This installs the latest released version of the CLI. To pin a specific CLI version:
+
+```yaml
+- uses: wombelix/params2env@v0.5.0
+  with:
+    version: 0.4.0
+```
+
+The action version (e.g., `@v0.5.0`) and CLI version can differ,
+allowing you to use newer action while pinning the CLI.
+
+### Go Install
 
 Or install via Go:
 
