@@ -18,7 +18,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X "main.version={{ .Version }}" -X "main.commit={{ .FullCommit }}" -X "main.date={{ .Date }}"
+      - -s -w -X "git.sr.ht/~wombelix/params2env/cmd.version={{ .Version }}" -X "git.sr.ht/~wombelix/params2env/cmd.commit={{ .FullCommit }}" -X "git.sr.ht/~wombelix/params2env/cmd.date={{ .Date }}"
 
 archives:
   - formats: [tar.gz]
