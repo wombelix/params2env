@@ -41,19 +41,19 @@ changelog:
   abbrev: 8
   groups:
     - title: "Features"
-      regexp: '^feat:'
+      regexp: '^feat(\([^)]+\))?:'
       order: 0
     - title: "Bug Fixes"
-      regexp: '^fix:'
+      regexp: '^fix(\([^)]+\))?:'
       order: 1
     - title: "Build"
-      regexp: '^build:'
+      regexp: '^build(\([^)]+\))?:'
       order: 2
     - title: "Test"
-      regexp: '^tests?:'
+      regexp: '^tests?(\([^)]+\))?:'
       order: 3
     - title: "Bump"
-      regexp: '^bump:'
+      regexp: '^bump(\([^)]+\))?:'
       order: 4
   filters:
     exclude:
