@@ -29,7 +29,7 @@ jobs:
             echo "Latest release: $LATEST_TAG"
 
       - name: Install params2env
-        uses: wombelix/params2env@${{ env.LATEST_TAG }}
+        uses: wombelix/params2env@main
 
       - name: Verify installed version
         run: |
