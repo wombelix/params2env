@@ -1,3 +1,9 @@
+## v0.6.0 (2026-01-18)
+
+### Feat
+
+- **action**: Add resuable GHA to install params2env as a workflow step
+
 ## v0.5.0 (2026-01-17)
 
 ### Feat
