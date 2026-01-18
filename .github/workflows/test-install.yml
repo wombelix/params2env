@@ -27,14 +27,17 @@ jobs:
       - name: Get latest release tag
         id: latest
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
             LATEST_TAG=$(GH_PAGER= gh release list --repo wombelix/params2env --limit 1 --json tagName | jq -r '.[0].tagName')
             echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+            echo "LATEST_VERSION=${LATEST_TAG#v}" >> $GITHUB_ENV
             echo "Latest release: $LATEST_TAG"
 
       - name: Install params2env
         uses: wombelix/params2env@main
+        with:
+          version: ${{ env.LATEST_VERSION }}
 
       - name: Verify installed version
         run: |
