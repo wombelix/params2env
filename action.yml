@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2026 Dominik Wombacher <dominik@wombacher.cc>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: "Install params2env"
+description: "Installs params2env tool, matching the action version"
+
+inputs:
+  version:
+    description: "Version of params2env to install (Format: x.y.z). Defaults to latest release."
+    required: true
+    default: "latest"
+
+runs:
+  using: composite
+  steps:
+    - name: Install params2env
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "$RUNNER_OS" != "Linux" ]; then
+          echo "Only Linux runners are currently supported. Detected OS: $RUNNER_OS"
+          exit 1
+        fi
+
+        case "$RUNNER_ARCH" in
+          X86|X64)   ARCH="amd64" ;;
+          ARM|ARM64) ARCH="arm64" ;;
+          *) echo "Unsupported architecture: $RUNNER_ARCH" && exit 1 ;;
+        esac
+
+        OS="${RUNNER_OS,,}"
+
+        VERSION="${{ inputs.version }}"
+
+        if [ "$VERSION" = "latest" ]; then
+            VERSION=$(gh release list --repo wombelix/params2env --limit 1 --json tagName | jq -r '.[0].tagName')
+            VERSION="${VERSION#v}"
+            echo "Resolved latest release version: $VERSION"
+        fi
+
+        BASE_URL="https://github.com/wombelix/params2env/releases/download/v${VERSION}"
+        ARCHIVE="params2env_${VERSION}_${OS}_${ARCH}.tar.gz"
+        CHECKSUMS="params2env_${VERSION}_checksums.txt"
+
+        echo "Downloading ${ARCHIVE}..."
+        curl -fsSL --retry 3 --retry-delay 2 "${BASE_URL}/${ARCHIVE}" -o "${ARCHIVE}"
+        curl -fsSL --retry 3 --retry-delay 2 "${BASE_URL}/${CHECKSUMS}" -o "${CHECKSUMS}"
+
+        echo "Verifying checksum..."
+        CHECKSUM_LINE=$(grep " ${ARCHIVE}$" "${CHECKSUMS}" || true)
+        if [ -z "$CHECKSUM_LINE" ]; then
+            echo "Checksum entry not found for ${ARCHIVE}!"
+            exit 1
+        fi
+        echo "$CHECKSUM_LINE" | sha256sum -c -
+
+        echo "Extracting and installing params2env..."
+        tar xzf "${ARCHIVE}" || { echo "Failed to extract ${ARCHIVE}"; exit 1; }
+
+        INSTALL_DIR="$HOME/.local/bin"
+        mkdir -p "$INSTALL_DIR"
+        mv "params2env_${VERSION}_${OS}_${ARCH}/params2env" "$INSTALL_DIR"
+
+        rm -rf "${ARCHIVE}" "${CHECKSUMS}" "params2env_${VERSION}_${OS}_${ARCH}" || true
+
+        # Add to PATH for the rest of the job
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+        echo "params2env ${VERSION} installed successfully to $INSTALL_DIR."
