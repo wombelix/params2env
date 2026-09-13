@@ -33,20 +33,6 @@ SPDX-License-Identifier: Apache-2.0
 * [Contribute](#contribute)
 * [License](#license)
 
-## CLI
-
-`params2env` reads AWS SSM Parameter Store parameters and writes them
-as environment variables. Also supports create, modify, and delete.
-
-### Technical details
-
-Uses AWS Go SDK. Minimal dependencies, prefers Go standard library
-(slog, testing) where possible.
-
-Config via YAML file (`~/.params2env.yaml` or `.params2env.yaml`) or
-CLI args. CLI args override config. Local config takes precedence
-over home directory.
-
 ## Installation
 
 Binaries for Linux, macOS, and Windows on
@@ -55,13 +41,15 @@ Download and add to PATH.
 
 ### GitHub Action
 
-Use the reusable action to install params2env in your workflows (Linux runners only):
+Use the reusable action to install params2env in your
+workflows (Linux runners only):
 
 ```yaml
 - uses: wombelix/params2env@v0.5.0
 ```
 
-This installs the latest released version of the CLI. To pin a specific CLI version:
+This installs the latest released version of the CLI.
+To pin a specific CLI version:
 
 ```yaml
 - uses: wombelix/params2env@v0.5.0
@@ -69,8 +57,9 @@ This installs the latest released version of the CLI. To pin a specific CLI vers
     version: 0.4.0
 ```
 
-The action version (e.g., `@v0.5.0`) and CLI version can differ,
-allowing you to use newer action while pinning the CLI.
+The action version (e.g., `@v0.5.0`) and CLI version
+can differ, allowing you to use a newer action while
+pinning the CLI.
 
 ### Go Install
 
@@ -82,7 +71,7 @@ go install git.sr.ht/~wombelix/params2env@latest
 
 ## Shell Completion
 
-Generate shell completion scripts for tab completion of commands and flags.
+Generate shell completion scripts.
 
 ```bash
 # Bash (add to ~/.bashrc)
@@ -98,49 +87,72 @@ params2env completion fish | source
 params2env completion powershell | Out-String | Invoke-Expression
 ```
 
+## CLI
+
+`params2env` reads AWS SSM Parameter Store parameters
+and writes them as environment variables. Also supports
+create, modify, and delete.
+
+### Technical details
+
+Uses AWS Go SDK. Minimal dependencies, prefers Go
+standard library (slog, testing) where possible.
+
+Config via YAML file (`~/.params2env.yaml` or
+`.params2env.yaml`) or CLI args. CLI args override
+config. Local config takes precedence over home
+directory.
+
 ## Usage
 
 Global flags:
 
-* `--loglevel`: `debug`, `info`, `warn`, `error`, `fatal`, `panic` (default: `info`)
-* `--version`: Print version
-* `--help`: Print help
+| Flag | Description |
+| ------------ | ----------------------------------------------------------------- |
+| `--loglevel` | `debug`, `info`, `warn`, `error`, `fatal`, `panic` (default: `info`) |
+| `--version` | Print version |
+| `--help` | Print help |
 
 ### Subcommand: read
 
-* `--region`: AWS region (or use `AWS_REGION`/`AWS_PROFILE` env vars)
-* `--path`: Parameter path (required)
-* `--role`: IAM role ARN to assume
-* `--file`: Output file (default: stdout)
-* `--format`: Output format: `env` or `github-env` (default: `env`)
-* `--upper`: Uppercase env var names (default: `true`)
-* `--env-prefix`: Prefix for env var names
-* `--env`: Custom env var name (overrides auto-generated name)
+| Flag | Description |
+| -------------- | ------------------------------------------------------- |
+| `--region` | AWS region (or use `AWS_REGION`/`AWS_PROFILE` env vars) |
+| `--path` | Parameter path (required) |
+| `--role` | IAM role ARN to assume |
+| `--file` | Output file (default: stdout) |
+| `--format` | Output format: `env` or `github-env` (default: `env`) |
+| `--upper` | Uppercase env var names (default: `true`) |
+| `--env-prefix` | Prefix for env var names |
+| `--env` | Custom env var name (overrides auto-generated name) |
 
 **Environment variable naming:**
 
-By default, the env var name is the last segment of the parameter path.
-With `--upper` (enabled by default), it gets uppercased.
+By default, the env var name is the last segment of the
+parameter path. With `--upper` (enabled by default), it
+gets uppercased.
 
 | Parameter Path | `--env-prefix` | `--upper` | Result |
-| ---------------- | ---------------- | ----------- | -------- |
+| ------------------ | -------------- | --------- | ---------------- |
 | `/app/db_password` | - | true | `DB_PASSWORD` |
 | `/app/db_password` | `APP` | true | `APP_DB_PASSWORD` |
 | `/app/db_password` | - | false | `db_password` |
 
-Use `--env` to set a fully custom name when auto-generation doesn't fit.
+Use `--env` to set a fully custom name when
+auto-generation doesn't fit.
 
 **Output formats:**
 
-* `env` (default): `export KEY="value"` - for shell sourcing
-* `github-env`: `KEY=value` - for GitHub Actions with automatic masking
+| Format | Output | Use case |
+| ----------------- | -------------------- | ------------------------------------- |
+| `env` (default) | `export KEY="value"` | Shell sourcing |
+| `github-env` | `KEY=value` | GitHub Actions with automatic masking |
 
 **GitHub Actions usage:**
 
-The `github-env` format automatically:
-
-* Outputs masking commands (`::add-mask::value`) to stdout
-* Append `KEY=value` format to `$GITHUB_ENV` file
+The `github-env` format outputs masking commands
+(`::add-mask::value`) to stdout and appends `KEY=value`
+to the `$GITHUB_ENV` file.
 
 ```bash
 # GitHub Actions workflow
@@ -186,15 +198,17 @@ source <(params2env read --path "/my/secret")
 
 ### Subcommand: create
 
-* `--region`: AWS region (or use `AWS_REGION` env var)
-* `--replica`: Replica region
-* `--path`: Parameter path (required)
-* `--description`: Parameter description
-* `--value`: Parameter value (optional, see below)
-* `--type`: `String` or `SecureString` (default: `String`)
-* `--kms`: KMS Key ID for SecureString (e.g., `alias/aws/ssm` or `alias/myapp-key`)
-* `--role`: IAM role ARN to assume
-* `--overwrite`: Overwrite existing (default: `false`)
+| Flag | Description |
+| --------------- | ------------------------------------------------------------------------- |
+| `--region` | AWS region (or use `AWS_REGION` env var) |
+| `--replica` | Replica region |
+| `--path` | Parameter path (required) |
+| `--description` | Parameter description |
+| `--value` | Parameter value (optional, see below) |
+| `--type` | `String` or `SecureString` (default: `String`) |
+| `--kms` | KMS Key ID for SecureString (e.g., `alias/aws/ssm` or `alias/myapp-key`) |
+| `--role` | IAM role ARN to assume |
+| `--overwrite` | Overwrite existing (default: `false`) |
 
 **Value input methods (in order of precedence):**
 
@@ -225,12 +239,14 @@ params2env create --path "/my/secret" --type "SecureString" --kms "alias/myapp-k
 
 ### Subcommand: modify
 
-* `--region`: AWS region (or use `AWS_REGION` env var)
-* `--replica`: Replica region
-* `--path`: Parameter path (required)
-* `--description`: Parameter description
-* `--value`: New value (optional, see below)
-* `--role`: IAM role ARN to assume
+| Flag | Description |
+| --------------- | ---------------------------------------- |
+| `--region` | AWS region (or use `AWS_REGION` env var) |
+| `--replica` | Replica region |
+| `--path` | Parameter path (required) |
+| `--description` | Parameter description |
+| `--value` | New value (optional, see below) |
+| `--role` | IAM role ARN to assume |
 
 **Value input methods (in order of precedence):**
 
@@ -256,10 +272,12 @@ params2env modify --path "/my/secret"
 
 ### Subcommand: delete
 
-* `--region`: AWS region (or use `AWS_REGION` env var)
-* `--replica`: Replica region to delete from
-* `--path`: Parameter path (required)
-* `--role`: IAM role ARN to assume
+| Flag | Description |
+| ------------ | ---------------------------------------- |
+| `--region` | AWS region (or use `AWS_REGION` env var) |
+| `--replica` | Replica region to delete from |
+| `--path` | Parameter path (required) |
+| `--role` | IAM role ARN to assume |
 
 Example:
 
@@ -272,9 +290,8 @@ params2env delete --region "eu-central-1" --replica "eu-west-1" \
 ### YAML configuration file reference
 
 Config file locations (local overrides global):
-
-* Global: `~/.params2env.yaml`
-* Local: `.params2env.yaml`
+Global: `~/.params2env.yaml`.
+Local: `.params2env.yaml`.
 
 ```yaml
 region: <aws region>
@@ -296,7 +313,7 @@ params:
 #### Config fields by command
 
 | Config Field | `create` | `modify` | `delete` | `read` |
-| -------------- | ---------- | ---------- | ---------- | -------- |
+| ------------ | -------- | -------- | -------- | ------ |
 | `region` | ✓ | ✓ | ✓ | ✓ |
 | `replica` | ✓ | ✓ | ✓ | - |
 | `role` | ✓ | ✓ | ✓ | ✓ |
@@ -307,17 +324,19 @@ params:
 | `upper` | - | - | - | ✓ |
 | `params` | - | - | - | ✓ |
 
-Notes:
+`kms` is only needed for `create` with SecureString.
+Modify and delete don't change encryption.
 
-* `kms` is only needed for `create` with SecureString.
-  Modify/delete don't change encryption.
-* `replica` keeps parameters in sync across regions during write operations.
-* `read` fetches from one region only.
-  Use per-param `region` override for multi-region reads.
+`replica` keeps parameters in sync across regions
+during write operations.
+
+`read` fetches from one region only. Use per-param
+`region` override for multi-region reads.
 
 #### Example: Simplify commands with config
 
-Without config, creating a SecureString requires many flags:
+Without config, creating a SecureString requires many
+flags:
 
 ```bash
 params2env create --path /app/secret --value "s3cr3t" --type SecureString \
@@ -395,9 +414,10 @@ export REPLICA_KEY_ID="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
 ./tests/integration-tests.sh
 ```
 
-Creates IAM roles/policies, tests all param types, cleans up after.
-KMS tests cost $1/month per key - script asks before creating.
-Set `PRIMARY_KEY_ID` and `REPLICA_KEY_ID` to use existing keys.
+Creates IAM roles/policies, tests all param types, cleans
+up after. KMS tests cost $1/month per key, the script
+asks before creating. Set `PRIMARY_KEY_ID` and
+`REPLICA_KEY_ID` to use existing keys.
 
 ## Source
 
@@ -410,9 +430,9 @@ Mirrors are available on
 
 ## Contribute
 
-Pick the platform you prefer and are most comfortable with.
-
-Provide feedback, open an issue or create a pull / merge request.
+Pick the platform you prefer and are most comfortable
+with. Provide feedback, open an issue or create a
+pull / merge request.
 
 ## License
 
@@ -421,5 +441,6 @@ Unless otherwise stated: `Apache 2.0`
 All files contain license information either as a
 `header comment` or a `corresponding .license` file.
 
-[REUSE](https://reuse.software) from the [FSFE](https://fsfe.org/)
-is implemented to verify license and copyright compliance.
+[REUSE](https://reuse.software) from the
+[FSFE](https://fsfe.org/) is implemented to verify
+license and copyright compliance.
