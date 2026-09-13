@@ -13,10 +13,10 @@ repos:
             #exclude: '^cfn/.*'
         -   id: check-json
         -   id: check-added-large-files
-  -   repo: https://github.com/markdownlint/markdownlint
-      rev: v0.15.0
+  -   repo: https://github.com/DavidAnson/markdownlint-cli2
+      rev: v0.23.2
       hooks:
-        -   id: markdownlint_docker
+        -   id: markdownlint-cli2-docker
             exclude: CHANGELOG.md
   -   repo: https://github.com/fsfe/reuse-tool
       rev: v6.2.0
@@ -82,3 +82,8 @@ repos:
   #  - id: ansible-lint
   #  repo: https://github.com/ansible-community/ansible-lint
   #  rev: v25.12.1
+  # GitHub Actions
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.10
+    hooks:
+      - id: actionlint-docker
