@@ -6,27 +6,29 @@ SPDX-License-Identifier: Apache-2.0
 
 # AWS SSM Parameter Store to Environment variables
 
-[![REUSE status](https://api.reuse.software/badge/git.sr.ht/~wombelix/params2env)](https://api.reuse.software/info/git.sr.ht/~wombelix/params2env)
-[![builds.sr.ht status](https://builds.sr.ht/~wombelix/params2env.svg)](https://builds.sr.ht/~wombelix/params2env?)
+<!-- markdownlint-disable MD013 -->
+[![REUSE status](https://api.reuse.software/badge/github.com/wombelix/params2env)](https://api.reuse.software/info/github.com/wombelix/params2env)
+[![Mirror](https://github.com/wombelix/params2env/actions/workflows/mirror.yml/badge.svg)](https://github.com/wombelix/params2env/actions/workflows/mirror.yml)
 [![Release](https://github.com/wombelix/params2env/actions/workflows/release.yml/badge.svg)](https://github.com/wombelix/params2env/actions/workflows/release.yml)
+<!-- markdownlint-enable MD013 -->
 
 ## Table of Contents
 
 * [Installation](#installation)
-   * [GitHub Action](#github-action)
-   * [Go Install](#go-install)
+  * [GitHub Action](#github-action)
+  * [Go Install](#go-install)
 * [Shell Completion](#shell-completion)
 * [CLI](#cli)
-   * [Technical details](#technical-details)
+  * [Technical details](#technical-details)
 * [Usage](#usage)
-   * [Subcommand: read](#subcommand-read)
-   * [Subcommand: create](#subcommand-create)
-   * [Subcommand: modify](#subcommand-modify)
-   * [Subcommand: delete](#subcommand-delete)
-   * [YAML configuration file reference](#yaml-configuration-file-reference)
+  * [Subcommand: read](#subcommand-read)
+  * [Subcommand: create](#subcommand-create)
+  * [Subcommand: modify](#subcommand-modify)
+  * [Subcommand: delete](#subcommand-delete)
+  * [YAML configuration file reference](#yaml-configuration-file-reference)
 * [Build and Test](#build-and-test)
-   * [Makefile](#makefile)
-   * [Integration Tests](#integration-tests)
+  * [Makefile](#makefile)
+  * [Integration Tests](#integration-tests)
 * [Source](#source)
 * [Contribute](#contribute)
 * [License](#license)
@@ -121,7 +123,7 @@ By default, the env var name is the last segment of the parameter path.
 With `--upper` (enabled by default), it gets uppercased.
 
 | Parameter Path | `--env-prefix` | `--upper` | Result |
-|----------------|----------------|-----------|--------|
+| ---------------- | ---------------- | ----------- | -------- |
 | `/app/db_password` | - | true | `DB_PASSWORD` |
 | `/app/db_password` | `APP` | true | `APP_DB_PASSWORD` |
 | `/app/db_password` | - | false | `db_password` |
@@ -294,7 +296,7 @@ params:
 #### Config fields by command
 
 | Config Field | `create` | `modify` | `delete` | `read` |
-|--------------|----------|----------|----------|--------|
+| -------------- | ---------- | ---------- | ---------- | -------- |
 | `region` | ✓ | ✓ | ✓ | ✓ |
 | `replica` | ✓ | ✓ | ✓ | - |
 | `role` | ✓ | ✓ | ✓ | ✓ |
@@ -368,6 +370,8 @@ params2env read --path /custom/param  # Single param (ignores params list)
 
 ## Build and Test
 
+### Makefile
+
 ```bash
 make build   # Build binary
 make tests   # Run tests with coverage
@@ -397,23 +401,18 @@ Set `PRIMARY_KEY_ID` and `REPLICA_KEY_ID` to use existing keys.
 
 ## Source
 
-Primary: [git.sr.ht/~wombelix/params2env](https://git.sr.ht/~wombelix/params2env)
+The primary location is:
+[github.com/wombelix/params2env](https://github.com/wombelix/params2env)
 
-Mirrors: [Codeberg](https://codeberg.org/wombelix/params2env),
-[Gitlab](https://gitlab.com/wombelix/params2env),
-[GitHub](https://github.com/wombelix/params2env)
+Mirrors are available on
+[Codeberg](https://codeberg.org/wombelix/params2env) and
+[Gitlab](https://gitlab.com/wombelix/params2env).
 
 ## Contribute
 
-Please don't hesitate to provide feedback,
-open an issue, or create a Pull / Merge Request.
+Pick the platform you prefer and are most comfortable with.
 
-Just pick the workflow or platform you prefer and are most comfortable with.
-
-Feedback, bug reports, or patches sent to my sr.ht list
-[~wombelix/inbox@lists.sr.ht](https://lists.sr.ht/~wombelix/inbox) or via
-[Email and Instant Messaging](https://dominik.wombacher.cc/pages/contact.html)
-are also always welcome.
+Provide feedback, open an issue or create a pull / merge request.
 
 ## License
 
