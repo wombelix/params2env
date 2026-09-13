@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"git.sr.ht/~wombelix/params2env/internal/logger"
+	"github.com/wombelix/params2env/internal/logger"
 	"github.com/spf13/cobra"
 )
 

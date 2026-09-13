@@ -66,7 +66,7 @@ pinning the CLI.
 Or install via Go:
 
 ```bash
-go install git.sr.ht/~wombelix/params2env@latest
+go install github.com/wombelix/params2env@latest
 ```
 
 ## Shell Completion

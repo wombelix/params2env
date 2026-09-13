@@ -11,7 +11,7 @@ import (
 	"log/slog"
 	"os"
 
-	"git.sr.ht/~wombelix/params2env/cmd"
+	"github.com/wombelix/params2env/cmd"
 )
 
 func main() {

@@ -12,9 +12,9 @@ import (
 	"os"
 	"strings"
 
-	"git.sr.ht/~wombelix/params2env/internal/aws"
-	"git.sr.ht/~wombelix/params2env/internal/config"
-	"git.sr.ht/~wombelix/params2env/internal/validation"
+	"github.com/wombelix/params2env/internal/aws"
+	"github.com/wombelix/params2env/internal/config"
+	"github.com/wombelix/params2env/internal/validation"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

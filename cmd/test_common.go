@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.sr.ht/~wombelix/params2env/internal/aws"
+	"github.com/wombelix/params2env/internal/aws"
 	"github.com/spf13/cobra"
 )
 
